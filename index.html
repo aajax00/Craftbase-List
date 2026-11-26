@@ -1,135 +1,675 @@
 <!DOCTYPE html>
-<html lang="fr" class="dark">
+<html lang="fr">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Base Tracker</title>
+  <title>Minecraft Base Tracker</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Silkscreen:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    * {
+      border-radius: 0px !important;
+      box-sizing: border-box;
+    }
+    html, body {
+      width: 100%;
+      min-height: 100vh;
+      margin: 0;
+      padding: 0;
+      background-color: #181818;
+      background-image:
+        linear-gradient(to right, rgba(255,255,255,0.025) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.025) 1px, transparent 1px);
+      background-size: 32px 32px;
+      font-family: 'JetBrains Mono', monospace;
+      color: #f3f3f3;
+    }
+    .mc-font {
+      font-family: 'Silkscreen', monospace;
+    }
+    .mc-pixel {
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    .mc-panel {
+      background-color: #262626;
+      border: 2px solid #0e0e0e;
+      box-shadow:
+        inset 2px 2px 0px #3d3d3d,
+        inset -2px -2px 0px #171717;
+    }
+    .mc-slot {
+      background-color: #161616;
+      border-top: 2px solid #0a0a0a;
+      border-left: 2px solid #0a0a0a;
+      border-right: 2px solid #3b3b3b;
+      border-bottom: 2px solid #3b3b3b;
+    }
+    .mc-slot:hover {
+      background-color: #1f1f1f;
+    }
+    .mc-btn {
+      background-color: #3a3a3a;
+      color: #f0f0f0;
+      border: 2px solid #0e0e0e;
+      box-shadow:
+        inset 2px 2px 0px #565656,
+        inset -2px -2px 0px #222222;
+      transition: background-color 0.08s;
+    }
+    .mc-btn:hover {
+      background-color: #4a4a4a;
+    }
+    .mc-btn:active {
+      box-shadow: inset 2px 2px 0px #1e1e1e;
+    }
+    .mc-btn-green {
+      background-color: #3c8527;
+      color: #ffffff;
+      border: 2px solid #0d1c08;
+      box-shadow:
+        inset 2px 2px 0px #57ad3e,
+        inset -2px -2px 0px #255716;
+      text-shadow: 1px 1px 0px #17380e;
+    }
+    .mc-btn-green:hover {
+      background-color: #469c2e;
+    }
+    .mc-btn-green:active {
+      box-shadow: inset 2px 2px 0px #214d14;
+    }
+    .mc-xp-track {
+      background-color: #131f10;
+      border: 2px solid #0a0a0a;
+    }
+    .mc-xp-fill {
+      background-color: #80ff20;
+      box-shadow: inset 0 -2px 0 #4ba60f;
+    }
+  </style>
 </head>
-<body class="bg-neutral-950 text-neutral-100 min-h-screen font-sans antialiased selection:bg-white selection:text-black">
-  <div class="max-w-4xl mx-auto px-4 py-8 sm:py-12 space-y-8">
+<body class="flex flex-col min-h-screen w-full selection:bg-[#80ff20] selection:text-black">
 
-    <!-- En-tête minimaliste -->
-    <header class="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-6 border-b border-neutral-800">
+  <!-- BARRE SUPÉRIEURE PLEINE LARGEUR -->
+  <header class="mc-panel w-full px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <div class="w-3.5 h-3.5 bg-[#80ff20] border border-black shrink-0"></div>
       <div>
-        <p class="text-xs uppercase tracking-widest text-neutral-500">Suivi de construction</p>
-        <h1 id="currentProjectTitle" class="text-2xl font-semibold tracking-tight mt-1">Base Principale</h1>
+        <h1 id="currentProjectTitle" class="mc-font text-lg sm:text-xl text-white leading-none">Base Principale</h1>
+        <p id="globalStatsText" class="text-xs text-neutral-400 mt-1">0 / 0 validés · 0%</p>
       </div>
+    </div>
 
-      <div class="flex flex-wrap items-center gap-2">
-        <select id="projectSelect" class="bg-neutral-900 border border-neutral-800 px-3 py-1.5 text-sm focus:outline-none focus:border-white"></select>
-        <button onclick="createNewProject()" class="bg-white text-black hover:bg-neutral-200 text-sm font-medium px-3 py-1.5 transition">+ Projet</button>
-        <button onclick="deleteCurrentProject()" class="border border-neutral-800 hover:border-red-500 hover:text-red-400 text-neutral-400 text-sm px-2.5 py-1.5 transition" title="Supprimer le projet">Suppr.</button>
+    <div class="flex flex-wrap items-center gap-2">
+      <span id="saveIndicator" class="text-[#80ff20] text-xs mr-2">✓ Sauvegardé</span>
+
+      <select id="projectSelect" class="mc-slot px-3 py-1.5 text-xs sm:text-sm text-white focus:outline-none"></select>
+      <button id="btnNewProject" onclick="createNewProject()" class="mc-btn-green mc-font text-xs px-3 py-2 cursor-pointer">+ Projet</button>
+      <button id="btnDelProject" onclick="deleteCurrentProject()" class="mc-btn text-xs px-2.5 py-2 text-neutral-300 hover:text-red-400 cursor-pointer">Suppr.</button>
+
+      <!-- Switch FR / EN -->
+      <div class="flex border-2 border-[#0e0e0e] ml-1">
+        <button id="langBtnFr" onclick="setLanguage('fr')" class="mc-font text-xs px-2.5 py-1.5 cursor-pointer">FR</button>
+        <button id="langBtnEn" onclick="setLanguage('en')" class="mc-font text-xs px-2.5 py-1.5 cursor-pointer">EN</button>
       </div>
-    </header>
+    </div>
+  </header>
 
-    <!-- Progression globale & Sauvegarde -->
-    <section class="space-y-3">
-      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-neutral-400">
-        <span id="globalStatsText">0 / 0 matériaux complétés</span>
-        <div class="flex items-center gap-4">
-          <button onclick="exportData()" class="hover:text-white underline underline-offset-4 transition">Exporter JSON</button>
-          <label class="hover:text-white underline underline-offset-4 transition cursor-pointer">
-            Importer JSON
-            <input type="file" accept=".json" onchange="importData(event)" class="hidden" />
-          </label>
-        </div>
-      </div>
-      <div class="w-full bg-neutral-900 h-1.5">
-        <div id="globalProgressBar" class="bg-emerald-500 h-1.5 transition-all duration-300" style="width: 0%"></div>
-      </div>
-    </section>
-
-    <!-- Import Capture d'écran (OCR) -->
-    <section class="border border-neutral-800 bg-neutral-900/40">
-      <label id="dropZone" class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3.5 cursor-pointer hover:bg-neutral-900 transition">
-        <span class="text-sm text-neutral-200">Importer une capture d'écran (cliquer, glisser ou <span class="text-neutral-400 font-mono text-xs">Ctrl+V</span>)</span>
-        <span class="text-xs uppercase tracking-wider text-neutral-400 border border-neutral-700 px-2.5 py-1 self-start sm:self-auto">Parcourir</span>
-        <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="handleImageUpload(event)" />
-      </label>
-
-      <!-- Barre de chargement OCR -->
-      <div id="ocrStatus" class="hidden px-4 py-3 border-t border-neutral-800 space-y-2">
-        <div class="flex justify-between text-xs text-neutral-400">
-          <span id="ocrStatusLabel">Analyse de l'image...</span>
-          <span id="ocrPercent" class="font-mono">0%</span>
-        </div>
-        <div class="w-full bg-neutral-800 h-1">
-          <div id="ocrProgressBar" class="bg-white h-1 transition-all" style="width: 0%"></div>
-        </div>
-      </div>
-
-      <!-- Vérification avant ajout -->
-      <div id="ocrReviewBox" class="hidden p-4 border-t border-neutral-800 bg-neutral-950 space-y-3">
-        <div class="flex items-center justify-between text-xs">
-          <span class="uppercase tracking-wider text-neutral-400">Matériaux détectés — vérifier avant validation</span>
-          <button onclick="closeOcrReview()" class="text-neutral-500 hover:text-white">Fermer</button>
-        </div>
-        <div id="ocrParsedList" class="space-y-2 max-h-60 overflow-y-auto"></div>
-        <div class="flex justify-end gap-2 pt-2">
-          <button onclick="addParsedRow()" class="border border-neutral-800 hover:border-neutral-600 text-xs px-3 py-1.5">+ Ligne</button>
-          <button onclick="confirmOcrItems()" class="bg-white text-black hover:bg-neutral-200 text-xs font-medium px-4 py-1.5">Ajouter à la liste</button>
-        </div>
-      </div>
-    </section>
-
-    <!-- Ajout manuel & Liste des matériaux -->
-    <section class="space-y-4">
-      <div class="flex items-center justify-between">
-        <h2 class="text-xs uppercase tracking-widest text-neutral-500">Matériaux requis</h2>
-        <label class="inline-flex items-center gap-2 text-xs text-neutral-400 hover:text-neutral-200 cursor-pointer select-none">
-          <input type="checkbox" id="hideCompletedCheckbox" onchange="render()" class="accent-white" />
-          Masquer terminés
-        </label>
-      </div>
-
-      <!-- Formulaire d'ajout direct -->
-      <form onsubmit="addManualItem(event)" class="grid grid-cols-1 sm:grid-cols-12 border border-neutral-800 bg-neutral-950">
-        <input type="text" id="manualName" placeholder="Nom du matériau" required
-          class="sm:col-span-6 bg-transparent px-3 py-2 text-sm border-b sm:border-b-0 sm:border-r border-neutral-800 focus:outline-none focus:bg-neutral-900" />
-        <input type="number" id="manualHave" placeholder="Stock (0)" min="0"
-          class="sm:col-span-2 bg-transparent px-3 py-2 text-sm border-b sm:border-b-0 sm:border-r border-neutral-800 focus:outline-none focus:bg-neutral-900 font-mono" />
-        <input type="number" id="manualNeed" placeholder="Requis" min="1" required
-          class="sm:col-span-2 bg-transparent px-3 py-2 text-sm border-b sm:border-b-0 sm:border-r border-neutral-800 focus:outline-none focus:bg-neutral-900 font-mono" />
-        <button type="submit" class="sm:col-span-2 bg-white text-black hover:bg-neutral-200 text-sm font-medium py-2 transition">Ajouter</button>
-      </form>
-
-      <!-- Liste plate séparée par des lignes fines -->
-      <div id="materialsList" class="border-t border-neutral-800 divide-y divide-neutral-800"></div>
-    </section>
-
+  <!-- BARRE D'XP GLOBALE -->
+  <div class="mc-xp-track w-full h-3">
+    <div id="globalProgressBar" class="mc-xp-fill h-full transition-all duration-300" style="width: 0%"></div>
   </div>
 
+  <!-- CONTENU PRINCIPAL PLEINE PAGE -->
+  <main class="flex-1 w-full p-4 sm:p-6 space-y-5">
+
+    <!-- ZONE IMPORT MULTI-CAPTURES & AJOUT RAPIDE -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+
+      <!-- Import captures d'écran -->
+      <section class="lg:col-span-6 mc-panel flex flex-col justify-between">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4">
+          <label id="dropZone" class="flex-1 cursor-pointer">
+            <p id="uiDropTitle" class="mc-font text-xs sm:text-sm text-white">Importer des captures d'écran</p>
+            <p id="uiDropHint" class="text-xs text-neutral-400 mt-1">1 ou plusieurs images · Glisser-déposer ou Ctrl+V</p>
+            <input type="file" id="imageInput" accept="image/*" multiple class="hidden" onchange="handleImageUpload(event)" />
+          </label>
+
+          <div class="flex items-center gap-2 shrink-0">
+            <select id="columnModeSelect" title="Colonnes sur l'image" class="mc-slot px-2 py-2 text-xs text-neutral-200 focus:outline-none">
+              <option value="auto">Auto</option>
+              <option value="2">2 Col.</option>
+              <option value="1">1 Col.</option>
+            </select>
+            <button type="button" onclick="openTextImportOnly()" id="uiTextModeBtn" class="mc-btn text-xs px-2.5 py-2 cursor-pointer">Texte</button>
+            <label for="imageInput" id="uiBrowseBtn" class="mc-btn-green mc-font text-xs px-3 py-2 cursor-pointer">Images</label>
+          </div>
+        </div>
+
+        <!-- Progression OCR -->
+        <div id="ocrStatus" class="hidden px-4 py-3 border-t-2 border-[#161616] bg-[#1d1d1d] space-y-2">
+          <div class="flex justify-between text-xs">
+            <span id="ocrStatusLabel" class="text-[#80ff20]">Analyse...</span>
+            <span id="ocrPercent" class="text-neutral-300">0%</span>
+          </div>
+          <div class="mc-xp-track w-full h-2">
+            <div id="ocrProgressBar" class="mc-xp-fill h-full transition-all" style="width: 0%"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Ajout manuel rapide -->
+      <section class="lg:col-span-6 mc-panel p-4 flex flex-col justify-center relative">
+        <p id="uiManualTitle" class="mc-font text-xs text-neutral-300 mb-2">Ajouter un bloc / item manuellement</p>
+        <form onsubmit="addManualItem(event)" class="grid grid-cols-12 gap-2">
+          <div class="col-span-6 flex items-center mc-slot">
+            <div id="manualPreviewBox" class="w-9 h-9 flex items-center justify-center border-r border-[#333] shrink-0">
+              <span class="text-xs text-neutral-600">?</span>
+            </div>
+            <input type="text" id="manualName" autocomplete="off" placeholder="Barrel, Stone Bricks..." required
+              oninput="onManualNameInput(this.value)"
+              class="w-full bg-transparent px-2.5 py-2 text-xs sm:text-sm text-white focus:outline-none" />
+          </div>
+          <input type="number" id="manualHave" placeholder="Stock" min="0"
+            class="col-span-2 mc-slot px-2 py-2 text-xs sm:text-sm text-white focus:outline-none" />
+          <input type="number" id="manualNeed" placeholder="Requis" min="1" required
+            class="col-span-2 mc-slot px-2 py-2 text-xs sm:text-sm text-white focus:outline-none" />
+          <button id="uiAddManualBtn" type="submit" class="col-span-2 mc-btn-green mc-font text-xs py-2 cursor-pointer">+</button>
+        </form>
+
+        <!-- Autocomplétion textures -->
+        <div id="autocompleteDropdown" class="hidden absolute left-4 right-4 top-full z-30 bg-[#181818] border-2 border-[#0e0e0e] divide-y divide-[#282828] max-h-64 overflow-y-auto"></div>
+      </section>
+
+    </div>
+
+    <!-- PANNEAU EN 2 ÉTAPES : TEXTE EXTRAIT -> LISTE AVEC ICÔNES -->
+    <section id="ocrReviewBox" class="hidden mc-panel p-4 bg-[#1e1e1e] space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2 pb-2 border-b-2 border-[#141414]">
+        <div class="flex items-center gap-3">
+          <span id="uiReviewTitle" class="mc-font text-xs sm:text-sm text-[#80ff20]">Conversion Image → Texte → Liste</span>
+          <span id="ocrCountBadge" class="text-xs text-neutral-400"></span>
+        </div>
+        <button id="uiCloseReview" onclick="closeOcrReview()" class="text-xs text-neutral-400 hover:text-white underline cursor-pointer">Fermer</button>
+      </div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <!-- ÉTAPE 1 : Texte brut extrait -->
+        <div class="lg:col-span-4 flex flex-col space-y-2">
+          <div class="flex items-center justify-between">
+            <label for="ocrRawTextArea" id="uiStep1Label" class="mc-font text-[11px] text-neutral-300">1. Texte extrait (modifiable)</label>
+            <button type="button" onclick="reparseFromTextArea()" id="uiReparseBtn" class="text-[11px] text-[#80ff20] hover:underline cursor-pointer">Actualiser ↻</button>
+          </div>
+          <textarea id="ocrRawTextArea" rows="12" oninput="reparseFromTextArea()"
+            placeholder="Stone : 1509&#10;Stone Bricks : 1153"
+            class="w-full flex-1 mc-slot p-2.5 text-xs text-neutral-100 font-mono leading-relaxed focus:outline-none resize-y"></textarea>
+        </div>
+
+        <!-- ÉTAPE 2 : Liste structurée générée depuis le texte -->
+        <div class="lg:col-span-8 flex flex-col space-y-2">
+          <div class="flex items-center justify-between">
+            <span id="uiStep2Label" class="mc-font text-[11px] text-neutral-300">2. Liste générée</span>
+            <button id="uiAddRowBtn" onclick="addParsedRow()" class="mc-btn text-xs px-2.5 py-1 cursor-pointer">+ Ligne</button>
+          </div>
+          <div id="ocrParsedList" class="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1"></div>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t-2 border-[#141414]">
+        <button id="uiConfirmOcrBtn" onclick="confirmOcrItems()" class="mc-btn-green mc-font text-xs px-5 py-2.5 cursor-pointer">Ajouter tout au projet</button>
+      </div>
+    </section>
+
+    <!-- LISTE DES MATÉRIAUX REQUIS -->
+    <section class="mc-panel p-4 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b-2 border-[#161616]">
+        <div class="flex items-center gap-3">
+          <h2 id="uiMaterialsHeader" class="mc-font text-sm sm:text-base text-white">Matériaux requis</h2>
+          <span id="catalogStatus" class="text-xs text-neutral-500"></span>
+        </div>
+
+        <div class="flex flex-wrap items-center gap-2">
+          <input type="text" id="listSearchInput" oninput="render()" placeholder="Filtrer la liste..."
+            class="mc-slot px-2.5 py-1.5 text-xs text-white focus:outline-none w-40 sm:w-52" />
+
+          <div class="flex items-center gap-1 text-xs">
+            <button id="filterAll" onclick="setFilter('all')" class="px-3 py-1.5 border border-[#0e0e0e] cursor-pointer">Tous</button>
+            <button id="filterTodo" onclick="setFilter('todo')" class="px-3 py-1.5 border border-[#0e0e0e] cursor-pointer">À faire</button>
+            <button id="filterDone" onclick="setFilter('done')" class="px-3 py-1.5 border border-[#0e0e0e] cursor-pointer">Validés</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="materialsList" class="grid grid-cols-1 xl:grid-cols-2 gap-3"></div>
+    </section>
+
+  </main>
+
   <script>
-    const STORAGE_KEY = 'base_builder_projects_v1';
+    const STORAGE_KEY = 'mc_base_tracker_v6';
+    const WEBISSO_BASE = 'https://webisso.github.io/minecraft-item-icons';
+
+    const I18N = {
+      fr: {
+        newProject: '+ Projet',
+        delProject: 'Suppr.',
+        promptProject: 'Nom du projet (ex: Château, Ferme à fer) :',
+        alertLastProject: 'Tu dois garder au moins un projet.',
+        confirmDelete: (name) => `Supprimer le projet "${name}" ?`,
+        stats: (done, total, pct) => `${done} / ${total} validés · ${pct}%`,
+        texturesLoading: '(Chargement API Webisso...)',
+        texturesLoaded: (n) => `(${n} icônes)`,
+        texturesOffline: '(Hors-ligne)',
+        saved: '✓ Sauvegardé',
+        dropTitle: "Importer des captures d'écran",
+        dropHint: '1 ou plusieurs images · Glisser-déposer ou Ctrl+V',
+        textModeBtn: 'Texte',
+        browseBtn: 'Images',
+        manualTitle: 'Ajouter un bloc / item manuellement',
+        placeholderName: 'Nom (ex: Barrel, Pierre taillée...)',
+        placeholderHave: 'Stock',
+        placeholderNeed: 'Requis',
+        searchPlaceholder: 'Filtrer la liste...',
+        ocrInit: 'Nettoyage et découpage des lignes...',
+        ocrScanning: (idx, total, pct) => `Extraction image ${idx}/${total} (${pct}%)...`,
+        ocrError: 'Erreur lors de la conversion.',
+        reviewTitle: 'Conversion Image → Texte → Liste',
+        step1Label: '1. Texte extrait (modifiable)',
+        reparseBtn: 'Actualiser ↻',
+        step2Label: '2. Liste générée',
+        reviewCount: (n) => `${n} éléments`,
+        closeReview: 'Fermer',
+        addRow: '+ Ligne',
+        confirmOcr: 'Ajouter tout au projet',
+        materialsHeader: 'Matériaux requis',
+        filterAll: 'Tous',
+        filterTodo: 'À faire',
+        filterDone: 'Validés',
+        emptyList: 'Aucun matériau à afficher.',
+        validatedBadge: '✓ VALIDÉ',
+        missingLabel: (txt) => `Reste : ${txt}`,
+        fillBtn: 'Compléter',
+        pickerPlaceholder: 'Rechercher une icône (ex: barrel, spruce, stairs...)'
+      },
+      en: {
+        newProject: '+ Project',
+        delProject: 'Delete',
+        promptProject: 'Project name (e.g. Castle, Iron Farm):',
+        alertLastProject: 'You must keep at least one project.',
+        confirmDelete: (name) => `Delete project "${name}"?`,
+        stats: (done, total, pct) => `${done} / ${total} validated · ${pct}%`,
+        texturesLoading: '(Loading Webisso API...)',
+        texturesLoaded: (n) => `(${n} icons)`,
+        texturesOffline: '(Offline)',
+        saved: '✓ Saved',
+        dropTitle: 'Upload screenshots',
+        dropHint: '1 or multiple images · Drag & drop or Ctrl+V',
+        textModeBtn: 'Text',
+        browseBtn: 'Images',
+        manualTitle: 'Add block / item manually',
+        placeholderName: 'Name (e.g. Barrel, Stone Bricks...)',
+        placeholderHave: 'Have',
+        placeholderNeed: 'Need',
+        searchPlaceholder: 'Filter list...',
+        ocrInit: 'Cleaning & slicing rows...',
+        ocrScanning: (idx, total, pct) => `Extracting image ${idx}/${total} (${pct}%)...`,
+        ocrError: 'Error converting image.',
+        reviewTitle: 'Image → Text → List Conversion',
+        step1Label: '1. Extracted text (editable)',
+        reparseBtn: 'Refresh ↻',
+        step2Label: '2. Generated list',
+        reviewCount: (n) => `${n} items`,
+        closeReview: 'Close',
+        addRow: '+ Row',
+        confirmOcr: 'Add all to project',
+        materialsHeader: 'Required Materials',
+        filterAll: 'All',
+        filterTodo: 'Remaining',
+        filterDone: 'Validated',
+        emptyList: 'No materials to display.',
+        validatedBadge: '✓ VALIDATED',
+        missingLabel: (txt) => `Left: ${txt}`,
+        fillBtn: 'Fill',
+        pickerPlaceholder: 'Search icon (e.g. barrel, spruce, stairs...)'
+      }
+    };
+
+    const FR_ALIASES = {
+      'bois': 'oak_log',
+      'buche': 'oak_log',
+      'buche de chene': 'oak_log',
+      'chene': 'oak_planks',
+      'planches': 'oak_planks',
+      'planches de chene': 'oak_planks',
+      'planches de sapin': 'spruce_planks',
+      'sapin': 'spruce_planks',
+      'buche de sapin': 'spruce_log',
+      'bois de sapin ecorce': 'stripped_spruce_wood',
+      'planches de bouleau': 'birch_planks',
+      'bouleau': 'birch_planks',
+      'buche de bouleau': 'birch_log',
+      'planches de chene noir': 'dark_oak_planks',
+      'chene noir': 'dark_oak_planks',
+      'planches de cerisier': 'cherry_planks',
+      'cerisier': 'cherry_planks',
+      'planches d acacia': 'acacia_planks',
+      'acacia': 'acacia_planks',
+      'planches d acajou': 'jungle_planks',
+      'acajou': 'jungle_planks',
+      'planches de paletuvier': 'mangrove_planks',
+      'paletuvier': 'mangrove_planks',
+      'planches de bambou': 'bamboo_planks',
+      'bambou': 'bamboo_planks',
+      'pierre': 'stone',
+      'pierres': 'cobblestone',
+      'pierre taillee': 'stone_bricks',
+      'pierres taillees': 'stone_bricks',
+      'ardoise': 'deepslate',
+      'ardoise taillee': 'deepslate_bricks',
+      'verre': 'glass',
+      'vitre': 'glass_pane',
+      'fer': 'iron_ingot',
+      'lingot de fer': 'iron_ingot',
+      'bloc de fer': 'iron_block',
+      'or': 'gold_ingot',
+      'lingot d or': 'gold_ingot',
+      'diamant': 'diamond',
+      'cuivre': 'copper_ingot',
+      'quartz': 'block_of_quartz',
+      'beton blanc': 'white_concrete',
+      'beton gris': 'gray_concrete',
+      'beton noir': 'black_concrete',
+      'terre cuite': 'terracotta',
+      'briques': 'bricks',
+      'obsidienne': 'obsidian',
+      'pierre lumineuse': 'glowstone',
+      'lanterne aquatique': 'sea_lantern',
+      'lanterne': 'lantern',
+      'torche': 'torch',
+      'coffre': 'chest',
+      'tonneau': 'barrel',
+      'baril': 'barrel',
+      'entonnoir': 'hopper',
+      'piston': 'piston',
+      'observateur': 'observer',
+      'redstone': 'redstone_dust',
+      'sable': 'sand',
+      'gres': 'sandstone',
+      'gravier': 'gravel',
+      'terre': 'dirt',
+      'bibliotheque': 'bookshelf',
+      'echafaudage': 'scaffolding',
+      'echelle': 'ladder',
+      'andesite': 'andesite',
+      'andesite polie': 'polished_andesite',
+      'diorite': 'diorite',
+      'granite': 'granite',
+      'tuf': 'tuff',
+      'seau d eau': 'water_bucket',
+      'carotte': 'carrot',
+      'graines de ble': 'wheat_seeds',
+      'four': 'furnace',
+      'haut fourneau': 'blast_furnace',
+      'feu de camp': 'campfire',
+      'tailleur de pierre': 'stonecutter',
+      'levier': 'lever'
+    };
+
+    let mcCatalog = [];
+    let mcCatalogById = {};
+    let selectedManualIcon = null;
+    let selectedManualFallback = null;
+    let activeIconPickerId = null;
+    let parsedOcrItems = [];
+    let currentFilter = 'all';
+    let catalogState = 'loading';
 
     let state = loadState();
-    let parsedOcrItems = [];
 
+    function t() {
+      return I18N[state.lang || 'fr'];
+    }
+
+    function setLanguage(lang) {
+      state.lang = lang;
+      document.documentElement.lang = lang;
+      saveState();
+    }
+
+    function setFilter(filter) {
+      currentFilter = filter;
+      render();
+    }
+
+    function normalizeStr(str) {
+      return String(str || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    // Distance pondérée adaptée aux confusions visuelles de la police Minecraft (ex: rt <-> rr dans Bartel -> Barrel)
+    function minecraftEditDistance(a, b) {
+      if (a === b) return 0;
+      if (!a.length) return b.length;
+      if (!b.length) return a.length;
+
+      // Normalise les digrammes visuellement identiques en pixel art
+      const canon = (s) => s
+        .replace(/rt/g, 'rr')
+        .replace(/rn/g, 'm')
+        .replace(/cl/g, 'd')
+        .replace(/vv/g, 'w');
+
+      const ca = canon(a);
+      const cb = canon(b);
+      if (ca === cb) return 0.25;
+
+      const matrix = Array.from({ length: cb.length + 1 }, (_, i) => [i]);
+      for (let j = 0; j <= ca.length; j++) matrix[0][j] = j;
+
+      for (let i = 1; i <= cb.length; i++) {
+        for (let j = 1; j <= ca.length; j++) {
+          const chA = ca[j - 1];
+          const chB = cb[i - 1];
+          let cost = chA === chB ? 0 : 1;
+          if (cost === 1) {
+            const pair = chA + chB;
+            if (['hw', 'wh', 'li', 'il', 'lt', 'tl', 'eo', 'oe', 'oc', 'co'].includes(pair)) {
+              cost = 0.4;
+            }
+          }
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j - 1] + cost
+          );
+        }
+      }
+      return matrix[cb.length][ca.length];
+    }
+
+    // --- Chargement API Webisso (https://webisso.github.io/minecraft-item-icons/) ---
+    async function loadMinecraftTextures() {
+      catalogState = 'loading';
+      render();
+
+      try {
+        const res = await fetch(`${WEBISSO_BASE}/api.json`);
+        if (!res.ok) throw new Error('Webisso API indisponible');
+        const raw = await res.json();
+        const entries = Array.isArray(raw) ? raw : (raw.icons || raw.items || []);
+
+        const catalogMap = new Map();
+
+        // Priorité aux catégories d'items et de blocs (évite qu'un mob ou particule prenne le dessus)
+        const categoryPriority = (catSlug = '') => {
+          if (catSlug.includes('block') || catSlug.includes('item')) return 0;
+          return 1;
+        };
+
+        entries.sort((a, b) => categoryPriority(a.category_slug) - categoryPriority(b.category_slug));
+
+        for (const entry of entries) {
+          if (!entry?.file || !entry?.file_slug || !entry?.category_slug) continue;
+
+          const baseName = entry.file.replace(/\.(png|webp|gif|jpg)$/i, '').replace(/_/g, ' ').trim();
+          const norm = normalizeStr(baseName);
+          const cleanId = norm.replace(/\s+/g, '_');
+          if (!cleanId || catalogMap.has(cleanId)) continue;
+
+          const subPath = entry.subcategory_slug ? `${entry.subcategory_slug}/` : '';
+          const iconUrl = `${WEBISSO_BASE}/thumbnails/${entry.category_slug}/${subPath}${entry.file_slug}`;
+          const fallbackUrl = `${WEBISSO_BASE}/assets/${entry.category_slug}/${subPath}${entry.file_slug}`;
+
+          catalogMap.set(cleanId, {
+            id: cleanId,
+            readable: baseName,
+            normReadable: norm,
+            iconUrl,
+            fallbackUrl
+          });
+        }
+
+        mcCatalog = Array.from(catalogMap.values());
+        mcCatalogById = {};
+        for (const item of mcCatalog) {
+          mcCatalogById[item.id] = item;
+        }
+
+        catalogState = mcCatalog.length > 0 ? 'loaded' : 'offline';
+      } catch (err) {
+        console.error(err);
+        catalogState = 'offline';
+      }
+
+      // Associe les icônes Webisso aux items déjà sauvegardés dans les projets
+      let updated = false;
+      for (const proj of state.projects) {
+        for (const item of proj.items) {
+          const match = resolveMinecraftItem(item.name);
+          if (match && (!item.iconUrl || !item.iconUrl.includes('webisso.github.io'))) {
+            item.iconUrl = match.iconUrl;
+            item.fallbackUrl = match.fallbackUrl;
+            updated = true;
+          }
+        }
+      }
+      if (updated) saveState();
+      else render();
+    }
+
+    function resolveMinecraftItem(rawName) {
+      if (!mcCatalog.length || !rawName) return null;
+      const norm = normalizeStr(rawName);
+      if (!norm) return null;
+
+      // 1. Alias FR exact
+      if (FR_ALIASES[norm] && mcCatalogById[FR_ALIASES[norm]]) {
+        return mcCatalogById[FR_ALIASES[norm]];
+      }
+
+      // 2. ID exact ou nom anglais exact
+      const asId = norm.replace(/\s+/g, '_');
+      if (mcCatalogById[asId]) return mcCatalogById[asId];
+
+      const exactReadable = mcCatalog.find(i => i.normReadable === norm);
+      if (exactReadable) return exactReadable;
+
+      // 3. Correspondance floue intelligente (ex: "Bartel" -> "Barrel", "Stripped Spruce Hood" -> "Stripped Spruce Wood")
+      const inputWords = norm.split(' ');
+      if (norm.length >= 4) {
+        let bestMatch = null;
+        let bestDist = norm.length >= 10 ? 2.2 : 1.3;
+
+        for (const item of mcCatalog) {
+          const itemWords = item.normReadable.split(' ');
+          if (itemWords.length !== inputWords.length) continue;
+          if (Math.abs(item.normReadable.length - norm.length) > 2) continue;
+
+          const d = minecraftEditDistance(norm, item.normReadable);
+          if (d <= bestDist) {
+            bestDist = d;
+            bestMatch = item;
+            if (d === 0) break;
+          }
+        }
+        if (bestMatch) return bestMatch;
+      }
+
+      return null;
+    }
+
+    function searchMinecraftCatalog(query, limit = 12) {
+      const norm = normalizeStr(query);
+      if (!norm || !mcCatalog.length) return [];
+
+      const results = [];
+      const seen = new Set();
+
+      for (const [frKey, mcId] of Object.entries(FR_ALIASES)) {
+        if (frKey.includes(norm) && mcCatalogById[mcId] && !seen.has(mcId)) {
+          seen.add(mcId);
+          results.push(mcCatalogById[mcId]);
+          if (results.length >= limit) return results;
+        }
+      }
+
+      const asId = norm.replace(/\s+/g, '_');
+      for (const item of mcCatalog) {
+        if (seen.has(item.id)) continue;
+        if (item.normReadable.includes(norm) || item.id.includes(asId)) {
+          seen.add(item.id);
+          results.push(item);
+          if (results.length >= limit) break;
+        }
+      }
+      return results;
+    }
+
+    function renderIconImg(iconUrl, fallbackUrl, sizeClass = 'w-8 h-8') {
+      if (!iconUrl) return `<span class="text-xs text-neutral-600">?</span>`;
+      const fb = escapeHtml(fallbackUrl || '');
+      return `<img src="${escapeHtml(iconUrl)}" data-fallback="${fb}" alt="" class="${sizeClass} mc-pixel object-contain"
+        onerror="if(this.dataset.fallback && this.src !== this.dataset.fallback){this.src=this.dataset.fallback;}else{this.style.display='none';}" />`;
+    }
+
+    // --- État & Sauvegarde ---
     function loadState() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
-        try { return JSON.parse(saved); } catch (e) {}
+        try {
+          const parsed = JSON.parse(saved);
+          if (!parsed.lang) parsed.lang = 'fr';
+          return parsed;
+        } catch {}
       }
       return {
+        lang: 'fr',
         activeProjectId: 'default',
-        projects: [
-          {
-            id: 'default',
-            name: 'Base Principale',
-            items: [
-              { id: '1', name: 'Bois', have: 150, need: 500 },
-              { id: '2', name: 'Pierre', have: 300, need: 300 }
-            ]
-          }
-        ]
+        projects: [{ id: 'default', name: 'Base Principale', items: [] }]
       };
     }
 
     function saveState() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      flashSaveIndicator();
       render();
+    }
+
+    function flashSaveIndicator() {
+      const el = document.getElementById('saveIndicator');
+      if (!el) return;
+      el.textContent = t().saved;
+      el.classList.remove('opacity-50');
+      clearTimeout(window._saveTimer);
+      window._saveTimer = setTimeout(() => el.classList.add('opacity-50'), 1500);
     }
 
     function getActiveProject() {
@@ -144,7 +684,7 @@
 
     // --- Projets ---
     function createNewProject() {
-      const name = prompt('Nom du projet :');
+      const name = prompt(t().promptProject);
       if (!name || !name.trim()) return;
       const id = 'proj_' + Date.now();
       state.projects.push({ id, name: name.trim(), items: [] });
@@ -154,11 +694,11 @@
 
     function deleteCurrentProject() {
       if (state.projects.length <= 1) {
-        alert('Impossible de supprimer le dernier projet.');
+        alert(t().alertLastProject);
         return;
       }
       const proj = getActiveProject();
-      if (!confirm(`Supprimer "${proj.name}" ?`)) return;
+      if (!confirm(t().confirmDelete(proj.name))) return;
       state.projects = state.projects.filter(p => p.id !== proj.id);
       state.activeProjectId = state.projects[0].id;
       saveState();
@@ -169,6 +709,51 @@
       saveState();
     });
 
+    // --- Autocomplétion ---
+    function onManualNameInput(val) {
+      const dropdown = document.getElementById('autocompleteDropdown');
+      const previewBox = document.getElementById('manualPreviewBox');
+
+      const directMatch = resolveMinecraftItem(val);
+      selectedManualIcon = directMatch ? directMatch.iconUrl : null;
+      selectedManualFallback = directMatch ? directMatch.fallbackUrl : null;
+      previewBox.innerHTML = directMatch
+        ? renderIconImg(directMatch.iconUrl, directMatch.fallbackUrl, 'w-6 h-6')
+        : `<span class="text-xs text-neutral-600">?</span>`;
+
+      const suggestions = searchMinecraftCatalog(val, 10);
+      if (!suggestions.length) {
+        dropdown.classList.add('hidden');
+        return;
+      }
+
+      dropdown.classList.remove('hidden');
+      dropdown.innerHTML = suggestions.map(s => `
+        <button type="button" onclick="selectAutocompleteItem('${escapeHtml(s.readable)}', '${escapeHtml(s.iconUrl)}', '${escapeHtml(s.fallbackUrl)}')"
+          class="w-full flex items-center justify-between px-3 py-2 text-left text-xs hover:bg-[#2a2a2a] transition cursor-pointer">
+          <div class="flex items-center gap-3">
+            ${renderIconImg(s.iconUrl, s.fallbackUrl, 'w-6 h-6')}
+            <span class="text-white">${escapeHtml(s.readable)}</span>
+          </div>
+          <span class="text-neutral-500">${escapeHtml(s.id)}</span>
+        </button>
+      `).join('');
+    }
+
+    function selectAutocompleteItem(name, iconUrl, fallbackUrl) {
+      document.getElementById('manualName').value = name;
+      selectedManualIcon = iconUrl;
+      selectedManualFallback = fallbackUrl;
+      document.getElementById('manualPreviewBox').innerHTML = renderIconImg(iconUrl, fallbackUrl, 'w-6 h-6');
+      document.getElementById('autocompleteDropdown').classList.add('hidden');
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#manualName') && !e.target.closest('#autocompleteDropdown')) {
+        document.getElementById('autocompleteDropdown').classList.add('hidden');
+      }
+    });
+
     // --- Matériaux ---
     function addManualItem(e) {
       e.preventDefault();
@@ -177,19 +762,40 @@
       const need = parseInt(document.getElementById('manualNeed').value, 10) || 1;
       if (!name) return;
 
-      upsertMaterial(name, have, need);
+      const resolved = selectedManualIcon
+        ? { iconUrl: selectedManualIcon, fallbackUrl: selectedManualFallback }
+        : resolveMinecraftItem(name);
+
+      upsertMaterial(name, have, need, resolved?.iconUrl || '', resolved?.fallbackUrl || '');
+
       e.target.reset();
+      selectedManualIcon = null;
+      selectedManualFallback = null;
+      document.getElementById('manualPreviewBox').innerHTML = `<span class="text-xs text-neutral-600">?</span>`;
+      document.getElementById('autocompleteDropdown').classList.add('hidden');
       saveState();
     }
 
-    function upsertMaterial(name, have, need) {
+    function upsertMaterial(name, have, need, iconUrl = '', fallbackUrl = '') {
       const proj = getActiveProject();
-      const existing = proj.items.find(i => i.name.toLowerCase() === name.toLowerCase());
+      const existing = proj.items.find(i => normalizeStr(i.name) === normalizeStr(name));
       if (existing) {
         existing.need += need;
         existing.have += have;
+        if (!existing.iconUrl && iconUrl) {
+          existing.iconUrl = iconUrl;
+          existing.fallbackUrl = fallbackUrl;
+        }
       } else {
-        proj.items.push({ id: 'item_' + Date.now() + Math.random(), name, have, need });
+        const autoMatch = iconUrl ? { iconUrl, fallbackUrl } : resolveMinecraftItem(name);
+        proj.items.push({
+          id: 'item_' + Date.now() + Math.random(),
+          name: autoMatch?.readable || name,
+          have,
+          need,
+          iconUrl: autoMatch?.iconUrl || '',
+          fallbackUrl: autoMatch?.fallbackUrl || ''
+        });
       }
     }
 
@@ -209,6 +815,18 @@
       saveState();
     }
 
+    function editItemNeed(id) {
+      const proj = getActiveProject();
+      const item = proj.items.find(i => i.id === id);
+      if (!item) return;
+      const val = prompt(`${item.name} — Requis :`, item.need);
+      const parsed = parseInt(val, 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        item.need = parsed;
+        saveState();
+      }
+    }
+
     function completeItem(id) {
       const proj = getActiveProject();
       const item = proj.items.find(i => i.id === id);
@@ -223,135 +841,528 @@
       saveState();
     }
 
-    // --- OCR ---
+    function toggleIconPicker(id) {
+      activeIconPickerId = activeIconPickerId === id ? null : id;
+      render();
+    }
+
+    function searchIconForItem(itemId, query) {
+      const container = document.getElementById(`pickerResults_${itemId}`);
+      if (!container) return;
+      const results = searchMinecraftCatalog(query, 18);
+      container.innerHTML = results.map(r => `
+        <button type="button" onclick="applyIconToItem('${itemId}', '${escapeHtml(r.iconUrl)}', '${escapeHtml(r.fallbackUrl)}')"
+          title="${escapeHtml(r.readable)}"
+          class="w-9 h-9 mc-slot flex items-center justify-center cursor-pointer">
+          ${renderIconImg(r.iconUrl, r.fallbackUrl, 'w-6 h-6')}
+        </button>
+      `).join('');
+    }
+
+    function applyIconToItem(itemId, iconUrl, fallbackUrl) {
+      const proj = getActiveProject();
+      const item = proj.items.find(i => i.id === itemId);
+      if (item) {
+        item.iconUrl = iconUrl;
+        item.fallbackUrl = fallbackUrl;
+      }
+      activeIconPickerId = null;
+      saveState();
+    }
+
+    // =========================================================================
+    // OCR SPÉCIALISÉ MINECRAFT : ISOLATION TEXTE + DÉCOUPE LIGNES + DOUBLE PASSE
+    // =========================================================================
+
+    // Convertit l'image en texte noir lissé sur fond blanc pur (supprime fond sombre + ombre portée)
+    function prepareCleanWhiteBgCanvas(file) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        const url = URL.createObjectURL(file);
+        img.onload = () => {
+          URL.revokeObjectURL(url);
+
+          const origW = img.width;
+          const origH = img.height;
+
+          // Étape A : Extraction des pixels du texte à la résolution native (évite les artefacts d'ombre)
+          const rawCanvas = document.createElement('canvas');
+          rawCanvas.width = origW;
+          rawCanvas.height = origH;
+          const rawCtx = rawCanvas.getContext('2d');
+          rawCtx.drawImage(img, 0, 0);
+
+          const imgData = rawCtx.getImageData(0, 0, origW, origH);
+          const data = imgData.data;
+
+          let sumLum = 0;
+          for (let i = 0; i < data.length; i += 16) {
+            sumLum += 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          }
+          const isDarkTheme = (sumLum / (data.length / 16)) < 140;
+
+          for (let i = 0; i < data.length; i += 4) {
+            const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+            let out;
+            if (isDarkTheme) {
+              // Seul le texte clair (> 140) devient noir ; fond sombre et ombre (<= 140) deviennent blanc pur
+              if (lum <= 140) out = 255;
+              else if (lum >= 205) out = 0;
+              else out = Math.round(255 - ((lum - 140) / 65) * 255);
+            } else {
+              if (lum >= 180) out = 255;
+              else if (lum <= 105) out = 0;
+              else out = Math.round(((lum - 105) / 75) * 255);
+            }
+            data[i] = data[i + 1] = data[i + 2] = out;
+            data[i + 3] = 255;
+          }
+          rawCtx.putImageData(imgData, 0, 0);
+
+          // Étape B : Agrandissement x3 avec lissage doux pour que Tesseract lise le 0 barré et les lettres sans erreur
+          const scale = origW < 1300 ? 3 : 2;
+          const scaledCanvas = document.createElement('canvas');
+          scaledCanvas.width = origW * scale;
+          scaledCanvas.height = origH * scale;
+          const sCtx = scaledCanvas.getContext('2d');
+          sCtx.imageSmoothingEnabled = true;
+          sCtx.imageSmoothingQuality = 'high';
+          sCtx.drawImage(rawCanvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+
+          resolve(scaledCanvas);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          resolve(null);
+        };
+        img.src = url;
+      });
+    }
+
+    function cropCanvasRect(src, x0, y0, x1, y1, pad = 6) {
+      const sx = Math.max(0, Math.floor(x0));
+      const sy = Math.max(0, Math.floor(y0));
+      const sw = Math.max(1, Math.min(src.width - sx, Math.ceil(x1 - sx)));
+      const sh = Math.max(1, Math.min(src.height - sy, Math.ceil(y1 - sy)));
+
+      const out = document.createElement('canvas');
+      out.width = sw + pad * 2;
+      out.height = sh + pad * 2;
+      const ctx = out.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, out.width, out.height);
+      ctx.drawImage(src, sx, sy, sw, sh, pad, pad, sw, sh);
+      return out;
+    }
+
+    function splitCanvasIntoColumns(canvas) {
+      const mode = document.getElementById('columnModeSelect').value;
+      const w = canvas.width;
+      const h = canvas.height;
+
+      if (mode === '1') return [canvas];
+      if (mode === '2') {
+        return [
+          cropCanvasRect(canvas, 0, 0, w / 2, h, 0),
+          cropCanvasRect(canvas, w / 2, 0, w, h, 0)
+        ];
+      }
+
+      // Mode Auto : cherche le couloir vertical blanc au milieu (42% - 58%)
+      const data = canvas.getContext('2d').getImageData(0, 0, w, h).data;
+      const yStart = Math.floor(h * 0.04);
+      const yEnd = Math.floor(h * 0.96);
+
+      const darkInCol = (x) => {
+        let count = 0;
+        for (let y = yStart; y < yEnd; y += 2) {
+          if (data[(y * w + x) * 4] < 160) count++;
+        }
+        return count;
+      };
+
+      let leftDark = 0;
+      for (let x = Math.floor(w * 0.14); x < Math.floor(w * 0.36); x += 4) leftDark += darkInCol(x);
+      let rightDark = 0;
+      for (let x = Math.floor(w * 0.64); x < Math.floor(w * 0.86); x += 4) rightDark += darkInCol(x);
+
+      if (leftDark < 30 || rightDark < 30) return [canvas];
+
+      let bestStart = -1, bestLen = 0, currStart = -1, currLen = 0;
+      for (let x = Math.floor(w * 0.43); x <= Math.floor(w * 0.57); x++) {
+        if (darkInCol(x) === 0) {
+          if (currStart === -1) currStart = x;
+          currLen++;
+          if (currLen > bestLen) {
+            bestLen = currLen;
+            bestStart = currStart;
+          }
+        } else {
+          currStart = -1;
+          currLen = 0;
+        }
+      }
+
+      if (bestLen >= 6) {
+        const midX = bestStart + Math.floor(bestLen / 2);
+        return [
+          cropCanvasRect(canvas, 0, 0, midX, h, 0),
+          cropCanvasRect(canvas, midX, 0, w, h, 0)
+        ];
+      }
+      return [canvas];
+    }
+
+    // Détecte les bandes horizontales (chaque ligne d'item) et la séparation Nom | Quantité
+    function analyzeColumnLayout(colCanvas) {
+      const w = colCanvas.width;
+      const h = colCanvas.height;
+      const data = colCanvas.getContext('2d').getImageData(0, 0, w, h).data;
+
+      // 1. Masque les 12.5% à gauche (emplacement de l'icône 3D) pour calculer la projection verticale du texte
+      const iconCutoffX = Math.floor(w * 0.125);
+      const colProj = new Int32Array(w);
+      for (let y = 0; y < h; y++) {
+        for (let x = iconCutoffX; x < w; x++) {
+          if (data[(y * w + x) * 4] < 165) colProj[x]++;
+        }
+      }
+
+      // Cherche s'il existe un couloir vide entre la colonne des noms et la colonne des chiffres (entre 58% et 86% de la largeur)
+      let splitNumX = -1;
+      let bestGapLen = 0;
+      let currGapStart = -1;
+      let currGapLen = 0;
+
+      for (let x = Math.floor(w * 0.58); x <= Math.floor(w * 0.86); x++) {
+        if (colProj[x] <= 1) {
+          if (currGapStart === -1) currGapStart = x;
+          currGapLen++;
+          if (currGapLen > bestGapLen) {
+            bestGapLen = currGapLen;
+            splitNumX = currGapStart + Math.floor(currGapLen / 2);
+          }
+        } else {
+          currGapStart = -1;
+          currGapLen = 0;
+        }
+      }
+
+      // Vérifie qu'il y a bien des chiffres à droite de splitNumX
+      let hasRightNumbers = false;
+      if (splitNumX !== -1 && bestGapLen >= Math.max(8, Math.floor(w * 0.025))) {
+        let rightInk = 0;
+        for (let x = splitNumX + 2; x < w - 4; x++) rightInk += colProj[x];
+        if (rightInk > 25) hasRightNumbers = true;
+      }
+
+      // 2. Détection de chaque ligne horizontale (y0 -> y1)
+      const rowProj = new Int32Array(h);
+      for (let y = 0; y < h; y++) {
+        let ink = 0;
+        for (let x = iconCutoffX; x < w; x++) {
+          if (data[(y * w + x) * 4] < 165) ink++;
+        }
+        rowProj[y] = ink;
+      }
+
+      const rows = [];
+      let inRow = false;
+      let rStart = 0;
+      for (let y = 0; y < h; y++) {
+        if (rowProj[y] >= 4) {
+          if (!inRow) {
+            inRow = true;
+            rStart = y;
+          }
+        } else if (inRow) {
+          if (y - rStart >= 8) {
+            rows.push({ y0: rStart, y1: y });
+          }
+          inRow = false;
+        }
+      }
+      if (inRow && h - rStart >= 8) rows.push({ y0: rStart, y1: h });
+
+      return { iconCutoffX, splitNumX: hasRightNumbers ? splitNumX : -1, rows };
+    }
+
+    function fixMinecraftOcrTypos(name) {
+      return name
+        .replace(/\bHood\b/gi, 'Wood')
+        .replace(/\bHall\b/gi, 'Wall')
+        .replace(/\bStab\b/gi, 'Slab')
+        .replace(/\bBartel\b/gi, 'Barrel')
+        .replace(/\b0ak\b/gi, 'Oak')
+        .replace(/\b1og\b/gi, 'Log')
+        .replace(/\b1ron\b/gi, 'Iron')
+        .replace(/\b8rick/gi, 'Brick')
+        .replace(/\bFurnaco\b/gi, 'Furnace')
+        .replace(/\bStalrs\b/gi, 'Stairs')
+        .replace(/\bTrapd00r\b/gi, 'Trapdoor')
+        .replace(/\bP0lished\b/gi, 'Polished')
+        .replace(/\bAndeslte\b/gi, 'Andesite')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
+
+    function cleanItemLabel(raw) {
+      let cleaned = String(raw || '')
+        .replace(/^[^a-zA-ZÀ-ÿ]+/, '')
+        .replace(/[^a-zA-ZÀ-ÿ)]+$/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      cleaned = cleaned.replace(/^[a-zA-Z]{1,2}\s+(?=[A-ZÀ-Ý])/, '').trim();
+      if (!/[a-zA-ZÀ-ÿ]{3,}/.test(cleaned)) return '';
+
+      cleaned = fixMinecraftOcrTypos(cleaned);
+      const match = resolveMinecraftItem(cleaned);
+      return match ? match.readable : cleaned;
+    }
+
+    function parseTextBlockToItems(text) {
+      const lines = String(text || '').split('\n').map(l => l.trim()).filter(Boolean);
+      const results = [];
+
+      for (let line of lines) {
+        line = line.replace(/^[^a-zA-ZÀ-ÿ0-9]+/, '').trim();
+        if (!line || !/[a-zA-ZÀ-ÿ]{3,}/.test(line)) continue;
+
+        if (/^(item|material|total|missing|available|materiau|requis|manquant)\b/i.test(line) && !/\d/.test(line)) {
+          continue;
+        }
+
+        // Format fraction : "Stone Bricks : 120/512"
+        const fracMatch = line.match(/^(.+?)\s*(?:[:\-])?\s*(\d+)\s*\/\s*(\d+)$/);
+        if (fracMatch) {
+          const name = cleanItemLabel(fracMatch[1]);
+          const have = parseInt(fracMatch[2], 10);
+          const need = parseInt(fracMatch[3], 10);
+          if (name && need > 0) {
+            const match = resolveMinecraftItem(name);
+            results.push({ name, have, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '' });
+            continue;
+          }
+        }
+
+        // Format "64 Oak Planks"
+        const prefixMatch = line.match(/^[xX×]?\s*(\d+)\s*[xX×]?\s+([a-zA-ZÀ-ÿ].+)$/);
+        if (prefixMatch) {
+          const need = parseInt(prefixMatch[1], 10);
+          const name = cleanItemLabel(prefixMatch[2]);
+          if (name && need > 0) {
+            const match = resolveMinecraftItem(name);
+            results.push({ name, have: 0, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '' });
+            continue;
+          }
+        }
+
+        // Format "Stone : 1509" ou "Stone 1509"
+        const tokens = line.split(/\s+/);
+        if (tokens.length >= 2) {
+          const lastToken = tokens[tokens.length - 1].replace(/^[xX×:]+/, '');
+          if (/^\d+$/.test(lastToken)) {
+            const need = parseInt(lastToken, 10);
+            const rawName = tokens.slice(0, -1).join(' ').replace(/[:\-xX×]+$/, '').trim();
+            const name = cleanItemLabel(rawName);
+            if (name && need > 0) {
+              const match = resolveMinecraftItem(name);
+              results.push({ name, have: 0, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '' });
+              continue;
+            }
+          }
+        }
+      }
+
+      return results;
+    }
+
+    function openTextImportOnly() {
+      document.getElementById('ocrReviewBox').classList.remove('hidden');
+      const area = document.getElementById('ocrRawTextArea');
+      area.focus();
+      reparseFromTextArea();
+    }
+
+    function reparseFromTextArea() {
+      const rawText = document.getElementById('ocrRawTextArea').value;
+      const extracted = parseTextBlockToItems(rawText);
+
+      const merged = new Map();
+      for (const item of extracted) {
+        const key = normalizeStr(item.name);
+        if (merged.has(key)) {
+          const prev = merged.get(key);
+          prev.have += item.have;
+          prev.need += item.need;
+        } else {
+          merged.set(key, { ...item });
+        }
+      }
+      parsedOcrItems = Array.from(merged.values());
+      renderOcrReview();
+    }
+
     function handleImageUpload(e) {
-      const file = e.target.files[0];
-      if (file) runOCR(file);
+      const files = Array.from(e.target.files || []).filter(f => f.type.startsWith('image/'));
+      if (files.length) runBatchOCR(files);
+      e.target.value = '';
     }
 
     window.addEventListener('paste', (e) => {
+      if (document.activeElement?.id === 'ocrRawTextArea') return;
       const items = e.clipboardData?.items;
       if (!items) return;
+      const files = [];
       for (const item of items) {
         if (item.type.startsWith('image/')) {
           const file = item.getAsFile();
-          if (file) runOCR(file);
-          break;
+          if (file) files.push(file);
         }
       }
+      if (files.length) runBatchOCR(files);
     });
 
     const dropZone = document.getElementById('dropZone');
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('bg-neutral-900'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('bg-neutral-900'));
+    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.parentElement.parentElement.classList.add('bg-[#2e2e2e]'); });
+    dropZone.addEventListener('dragleave', () => dropZone.parentElement.parentElement.classList.remove('bg-[#2e2e2e]'));
     dropZone.addEventListener('drop', (e) => {
       e.preventDefault();
-      dropZone.classList.remove('bg-neutral-900');
-      const file = e.dataTransfer.files[0];
-      if (file && file.type.startsWith('image/')) runOCR(file);
+      dropZone.parentElement.parentElement.classList.remove('bg-[#2e2e2e]');
+      const files = Array.from(e.dataTransfer.files || []).filter(f => f.type.startsWith('image/'));
+      if (files.length) runBatchOCR(files);
     });
 
-    async function runOCR(imageFile) {
+    async function runBatchOCR(imageFiles) {
       const statusBox = document.getElementById('ocrStatus');
       const statusLabel = document.getElementById('ocrStatusLabel');
       const percentLabel = document.getElementById('ocrPercent');
       const progressBar = document.getElementById('ocrProgressBar');
 
       statusBox.classList.remove('hidden');
-      statusLabel.textContent = 'Initialisation OCR...';
+      statusLabel.textContent = t().ocrInit;
       percentLabel.textContent = '0%';
       progressBar.style.width = '0%';
 
+      const totalFiles = imageFiles.length;
+
       try {
-        const worker = await Tesseract.createWorker(['fra', 'eng'], 1, {
-          logger: m => {
-            if (m.status === 'recognizing text') {
-              const pct = Math.round(m.progress * 100);
-              statusLabel.textContent = 'Lecture en cours...';
-              percentLabel.textContent = pct + '%';
-              progressBar.style.width = pct + '%';
+        const worker = await Tesseract.createWorker(['eng', 'fra'], 1);
+        const allCleanTextLines = [];
+
+        for (let fIdx = 0; fIdx < totalFiles; fIdx++) {
+          const cleanCanvas = await prepareCleanWhiteBgCanvas(imageFiles[fIdx]);
+          if (!cleanCanvas) continue;
+
+          const columns = splitCanvasIntoColumns(cleanCanvas);
+
+          for (let cIdx = 0; cIdx < columns.length; cIdx++) {
+            const col = columns[cIdx];
+            const layout = analyzeColumnLayout(col);
+
+            if (layout.splitNumX !== -1 && layout.rows.length > 0) {
+              // Mode haute précision : chaque ligne est découpée en [Nom à gauche] + [Chiffres à droite]
+              for (let rIdx = 0; rIdx < layout.rows.length; rIdx++) {
+                const row = layout.rows[rIdx];
+                const padY = Math.max(4, Math.round((row.y1 - row.y0) * 0.25));
+                const y0 = row.y0 - padY;
+                const y1 = row.y1 + padY;
+
+                // 1. Lecture du Nom (lettres uniquement, sans icône ni chiffre)
+                const nameCrop = cropCanvasRect(col, layout.iconCutoffX, y0, layout.splitNumX, y1, 8);
+                await worker.setParameters({
+                  tessedit_pageseg_mode: '7',
+                  tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyzÀ-ÿ '-"
+                });
+                const nameRes = await worker.recognize(nameCrop);
+                const cleanName = cleanItemLabel(nameRes.data.text);
+
+                // 2. Lecture de la Quantité (chiffres uniquement)
+                const numCrop = cropCanvasRect(col, layout.splitNumX, y0, col.width, y1, 8);
+                await worker.setParameters({
+                  tessedit_pageseg_mode: '7',
+                  tessedit_char_whitelist: '0123456789/'
+                });
+                const numRes = await worker.recognize(numCrop);
+                const numStr = (numRes.data.text || '').replace(/\s+/g, '').trim();
+
+                if (cleanName && numStr) {
+                  allCleanTextLines.push(`${cleanName} : ${numStr}`);
+                }
+
+                const stepPct = Math.round(((rIdx + 1) / layout.rows.length) * 100);
+                const overallPct = Math.round(((fIdx + (cIdx + (rIdx + 1) / layout.rows.length) / columns.length) / totalFiles) * 100);
+                statusLabel.textContent = t().ocrScanning(fIdx + 1, totalFiles, stepPct);
+                percentLabel.textContent = overallPct + '%';
+                progressBar.style.width = overallPct + '%';
+              }
+            } else {
+              // Fallback standard pour formats libres (ex: "64 Oak Planks")
+              await worker.setParameters({
+                tessedit_pageseg_mode: '6',
+                tessedit_char_whitelist: ''
+              });
+              const { data: { text } } = await worker.recognize(col);
+              const items = parseTextBlockToItems(text);
+              for (const it of items) {
+                allCleanTextLines.push(it.have > 0 ? `${it.name} : ${it.have}/${it.need}` : `${it.name} : ${it.need}`);
+              }
             }
           }
-        });
-
-        const { data: { text } } = await worker.recognize(imageFile);
-        await worker.terminate();
-
-        statusBox.classList.add('hidden');
-        parsedOcrItems = parseMaterialLines(text);
-        if (parsedOcrItems.length === 0) {
-          parsedOcrItems = [{ name: '', have: 0, need: 1 }];
         }
-        renderOcrReview();
+
+        await worker.terminate();
+        statusBox.classList.add('hidden');
+
+        const area = document.getElementById('ocrRawTextArea');
+        area.value = allCleanTextLines.join('\n');
+        document.getElementById('ocrReviewBox').classList.remove('hidden');
+        reparseFromTextArea();
       } catch (err) {
         console.error(err);
-        statusLabel.textContent = 'Erreur lors de la lecture.';
+        statusLabel.textContent = t().ocrError;
       }
     }
 
-    function parseMaterialLines(rawText) {
-      const lines = rawText.split('\n').map(l => l.trim()).filter(Boolean);
-      const results = [];
-
-      for (let line of lines) {
-        line = line.replace(/^[\-\*\•\|\[\]\(\)]+\s*/, '');
-
-        let matchFraction = line.match(/^(.*?)\s*(\d+)\s*\/\s*(\d+)\s*(.*)$/);
-        if (matchFraction) {
-          const name = (matchFraction[1] || matchFraction[4]).replace(/[:\-xX]+$/, '').trim();
-          const have = parseInt(matchFraction[2], 10);
-          const need = parseInt(matchFraction[3], 10);
-          if (name && need > 0) {
-            results.push({ name, have, need });
-            continue;
-          }
-        }
-
-        let matchPrefix = line.match(/^[xX×]?\s*(\d+)\s*[xX×]?\s+(.+)$/);
-        if (matchPrefix) {
-          const need = parseInt(matchPrefix[1], 10);
-          const name = matchPrefix[2].trim();
-          if (name.length > 1 && need > 0) {
-            results.push({ name, have: 0, need });
-            continue;
-          }
-        }
-
-        let matchSuffix = line.match(/^(.+?)\s*(?:[:\-xX×])\s*(\d+)$/) || line.match(/^(.+?)\s+(\d+)$/);
-        if (matchSuffix) {
-          const name = matchSuffix[1].trim();
-          const need = parseInt(matchSuffix[2], 10);
-          if (name.length > 1 && need > 0) {
-            results.push({ name, have: 0, need });
-          }
-        }
-      }
-      return results;
+    function updateOcrItemName(idx, val) {
+      parsedOcrItems[idx].name = val;
+      const match = resolveMinecraftItem(val);
+      parsedOcrItems[idx].iconUrl = match?.iconUrl || '';
+      parsedOcrItems[idx].fallbackUrl = match?.fallbackUrl || '';
+      renderOcrReview();
     }
 
     function renderOcrReview() {
       const box = document.getElementById('ocrReviewBox');
       const list = document.getElementById('ocrParsedList');
+      const countBadge = document.getElementById('ocrCountBadge');
       box.classList.remove('hidden');
+      countBadge.textContent = t().reviewCount(parsedOcrItems.length);
 
       list.innerHTML = parsedOcrItems.map((item, idx) => `
-        <div class="grid grid-cols-12 gap-2 items-center">
-          <input type="text" value="${escapeHtml(item.name)}" placeholder="Matériau"
-            onchange="parsedOcrItems[${idx}].name = this.value"
-            class="col-span-6 bg-neutral-900 border border-neutral-800 px-2.5 py-1 text-sm focus:outline-none focus:border-white" />
-          <input type="number" value="${item.have}" min="0" placeholder="Stock"
+        <div class="grid grid-cols-12 gap-1.5 items-center bg-[#161616] p-1.5 border border-[#2a2a2a]">
+          <div class="col-span-6 flex items-center mc-slot">
+            <div class="w-8 h-8 flex items-center justify-center border-r border-[#333] shrink-0">
+              ${renderIconImg(item.iconUrl, item.fallbackUrl, 'w-6 h-6')}
+            </div>
+            <input type="text" value="${escapeHtml(item.name)}" placeholder="Item"
+              onchange="updateOcrItemName(${idx}, this.value)"
+              class="w-full bg-transparent px-2 py-1 text-xs text-white focus:outline-none" />
+          </div>
+          <input type="number" value="${item.have}" min="0" placeholder="0"
             onchange="parsedOcrItems[${idx}].have = parseInt(this.value,10)||0"
-            class="col-span-2 bg-neutral-900 border border-neutral-800 px-2 py-1 text-sm font-mono focus:outline-none focus:border-white" />
-          <input type="number" value="${item.need}" min="1" placeholder="Requis"
+            class="col-span-2 mc-slot px-2 py-1 text-xs text-white focus:outline-none" />
+          <input type="number" value="${item.need}" min="1" placeholder="1"
             onchange="parsedOcrItems[${idx}].need = parseInt(this.value,10)||1"
-            class="col-span-3 bg-neutral-900 border border-neutral-800 px-2 py-1 text-sm font-mono focus:outline-none focus:border-white" />
-          <button onclick="parsedOcrItems.splice(${idx},1); renderOcrReview()" class="col-span-1 text-neutral-500 hover:text-red-400 text-xs">✕</button>
+            class="col-span-3 mc-slot px-2 py-1 text-xs text-white focus:outline-none" />
+          <button onclick="parsedOcrItems.splice(${idx},1); renderOcrReview()" class="col-span-1 text-neutral-500 hover:text-red-400 text-xs cursor-pointer">✕</button>
         </div>
       `).join('');
     }
 
     function addParsedRow() {
-      parsedOcrItems.push({ name: '', have: 0, need: 1 });
+      parsedOcrItems.push({ name: '', have: 0, need: 1, iconUrl: '', fallbackUrl: '' });
       renderOcrReview();
     }
 
@@ -363,46 +1374,69 @@
     function confirmOcrItems() {
       for (const item of parsedOcrItems) {
         if (item.name && item.name.trim()) {
-          upsertMaterial(item.name.trim(), item.have || 0, item.need || 1);
+          upsertMaterial(item.name.trim(), item.have || 0, item.need || 1, item.iconUrl || '', item.fallbackUrl || '');
         }
       }
       closeOcrReview();
       saveState();
     }
 
-    // --- JSON ---
-    function exportData() {
-      const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'base-materiaux.json';
-      a.click();
-      URL.revokeObjectURL(url);
-    }
+    // --- Formatage Stacks & Shulkers ---
+    function formatStacks(missing) {
+      if (missing < 64) return `${missing}`;
+      const shulkers = Math.floor(missing / 1728);
+      const remAfterShulker = missing % 1728;
+      const stacks = Math.floor(remAfterShulker / 64);
+      const rest = remAfterShulker % 64;
 
-    function importData(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = () => {
-        try {
-          const imported = JSON.parse(reader.result);
-          if (imported && Array.isArray(imported.projects)) {
-            state = imported;
-            saveState();
-          } else {
-            alert('Fichier JSON invalide.');
-          }
-        } catch {
-          alert('Impossible de lire ce fichier.');
-        }
-      };
-      reader.readAsText(file);
+      const parts = [];
+      if (shulkers > 0) parts.push(`${shulkers} shulker${shulkers > 1 ? 's' : ''}`);
+      if (stacks > 0) parts.push(`${stacks}×64`);
+      if (rest > 0) parts.push(`${rest}`);
+      return `${missing} (${parts.join(' + ')})`;
     }
 
     // --- Rendu ---
     function render() {
+      const lang = state.lang || 'fr';
+      const dict = t();
+
+      document.getElementById('btnNewProject').textContent = dict.newProject;
+      document.getElementById('btnDelProject').textContent = dict.delProject;
+      document.getElementById('uiDropTitle').textContent = dict.dropTitle;
+      document.getElementById('uiDropHint').textContent = dict.dropHint;
+      document.getElementById('uiTextModeBtn').textContent = dict.textModeBtn;
+      document.getElementById('uiBrowseBtn').textContent = dict.browseBtn;
+      document.getElementById('uiManualTitle').textContent = dict.manualTitle;
+      document.getElementById('manualName').placeholder = dict.placeholderName;
+      document.getElementById('manualHave').placeholder = dict.placeholderHave;
+      document.getElementById('manualNeed').placeholder = dict.placeholderNeed;
+      document.getElementById('listSearchInput').placeholder = dict.searchPlaceholder;
+      document.getElementById('uiReviewTitle').textContent = dict.reviewTitle;
+      document.getElementById('uiStep1Label').textContent = dict.step1Label;
+      document.getElementById('uiReparseBtn').textContent = dict.reparseBtn;
+      document.getElementById('uiStep2Label').textContent = dict.step2Label;
+      document.getElementById('uiCloseReview').textContent = dict.closeReview;
+      document.getElementById('uiAddRowBtn').textContent = dict.addRow;
+      document.getElementById('uiConfirmOcrBtn').textContent = dict.confirmOcr;
+      document.getElementById('uiMaterialsHeader').textContent = dict.materialsHeader;
+      document.getElementById('filterAll').textContent = dict.filterAll;
+      document.getElementById('filterTodo').textContent = dict.filterTodo;
+      document.getElementById('filterDone').textContent = dict.filterDone;
+
+      document.getElementById('langBtnFr').className = `mc-font text-xs px-2.5 py-1.5 cursor-pointer ${lang === 'fr' ? 'bg-[#80ff20] text-black font-bold' : 'bg-[#1a1a1a] text-neutral-400'}`;
+      document.getElementById('langBtnEn').className = `mc-font text-xs px-2.5 py-1.5 cursor-pointer ${lang === 'en' ? 'bg-[#80ff20] text-black font-bold' : 'bg-[#1a1a1a] text-neutral-400'}`;
+
+      ['all', 'todo', 'done'].forEach(f => {
+        const btn = document.getElementById('filter' + f.charAt(0).toUpperCase() + f.slice(1));
+        btn.className = `px-3 py-1.5 border border-[#0e0e0e] cursor-pointer ${currentFilter === f ? 'bg-[#80ff20] text-black font-bold' : 'bg-[#1a1a1a] text-neutral-400 hover:text-white'}`;
+      });
+
+      const catEl = document.getElementById('catalogStatus');
+      if (catalogState === 'loading') catEl.textContent = dict.texturesLoading;
+      else if (catalogState === 'loaded') catEl.textContent = dict.texturesLoaded(mcCatalog.length);
+      else catEl.textContent = dict.texturesOffline;
+
       const select = document.getElementById('projectSelect');
       select.innerHTML = state.projects.map(p =>
         `<option value="${p.id}" ${p.id === state.activeProjectId ? 'selected' : ''}>${escapeHtml(p.name)}</option>`
@@ -417,47 +1451,78 @@
       const totalNeed = proj.items.reduce((acc, i) => acc + i.need, 0);
       const globalPct = totalNeed > 0 ? Math.round((totalHave / totalNeed) * 100) : 0;
 
-      document.getElementById('globalStatsText').textContent =
-        `${doneItems} / ${totalItems} ressources complètes · ${globalPct}%`;
+      document.getElementById('globalStatsText').textContent = dict.stats(doneItems, totalItems, globalPct);
       document.getElementById('globalProgressBar').style.width = globalPct + '%';
 
-      const hideCompleted = document.getElementById('hideCompletedCheckbox').checked;
-      const visibleItems = hideCompleted ? proj.items.filter(i => i.have < i.need) : proj.items;
+      const searchTerm = normalizeStr(document.getElementById('listSearchInput').value);
+
+      let visibleItems = [...proj.items];
+      if (currentFilter === 'todo') visibleItems = visibleItems.filter(i => i.have < i.need);
+      if (currentFilter === 'done') visibleItems = visibleItems.filter(i => i.have >= i.need);
+      if (searchTerm) {
+        visibleItems = visibleItems.filter(i => normalizeStr(i.name).includes(searchTerm));
+      }
+
+      visibleItems.sort((a, b) => (a.have >= a.need ? 1 : 0) - (b.have >= b.need ? 1 : 0));
 
       const listEl = document.getElementById('materialsList');
       if (visibleItems.length === 0) {
-        listEl.innerHTML = `<p class="text-xs text-neutral-600 py-8 text-center">Aucun matériau à afficher.</p>`;
+        listEl.innerHTML = `<p class="col-span-full text-xs text-neutral-500 py-10 text-center">${dict.emptyList}</p>`;
         return;
       }
 
       listEl.innerHTML = visibleItems.map(item => {
-        const isDone = item.have >= item.need;
+        const isValidated = item.have >= item.need;
         const pct = Math.min(100, Math.round((item.have / item.need) * 100));
         const missing = Math.max(0, item.need - item.have);
+        const isPickerOpen = activeIconPickerId === item.id;
 
         return `
-          <div class="py-3.5 space-y-2.5 ${isDone ? 'opacity-50' : ''}">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div class="flex items-baseline gap-3">
-                <span class="text-sm font-medium ${isDone ? 'line-through text-neutral-400' : 'text-neutral-100'}">${escapeHtml(item.name)}</span>
-                <span class="text-xs text-neutral-500 font-mono">${isDone ? 'Complet' : `-${missing}`}</span>
+          <div class="p-3 border-2 transition ${isValidated ? 'bg-[#172814] border-[#3c8527]' : 'bg-[#1d1d1d] border-[#101010]'} space-y-2.5">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+              <div class="flex items-center gap-3 min-w-0">
+                <button type="button" onclick="toggleIconPicker('${item.id}')"
+                  class="w-11 h-11 mc-slot flex items-center justify-center shrink-0 cursor-pointer">
+                  ${renderIconImg(item.iconUrl, item.fallbackUrl, 'w-8 h-8')}
+                </button>
+
+                <div class="min-w-0">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <span class="text-sm font-bold truncate ${isValidated ? 'text-[#80ff20]' : 'text-white'}">${escapeHtml(item.name)}</span>
+                    ${isValidated
+                      ? `<span class="mc-font text-[10px] bg-[#3c8527] text-white px-2 py-0.5 border border-[#0f1f0a]">${dict.validatedBadge}</span>`
+                      : `<span class="text-xs text-amber-400">${dict.missingLabel(formatStacks(missing))}</span>`
+                    }
+                  </div>
+                </div>
               </div>
 
-              <div class="flex flex-wrap items-center gap-1">
-                <button onclick="incrementItem('${item.id}', -1)" class="border border-neutral-800 hover:border-neutral-600 px-2 py-0.5 text-xs font-mono">-1</button>
+              <div class="flex flex-wrap items-center gap-1 shrink-0">
+                <button onclick="incrementItem('${item.id}', -1)" class="mc-btn px-2 py-1 text-xs cursor-pointer">-1</button>
                 <input type="number" value="${item.have}" min="0" onchange="setItemHave('${item.id}', this.value)"
-                  class="w-16 bg-neutral-900 border border-neutral-800 px-1.5 py-0.5 text-center text-xs font-mono focus:outline-none focus:border-white" />
-                <span class="text-xs text-neutral-500 font-mono px-1">/ ${item.need}</span>
-                <button onclick="incrementItem('${item.id}', 1)" class="border border-neutral-800 hover:border-neutral-600 px-2 py-0.5 text-xs font-mono">+1</button>
-                <button onclick="incrementItem('${item.id}', 10)" class="border border-neutral-800 hover:border-neutral-600 px-2 py-0.5 text-xs font-mono">+10</button>
-                <button onclick="incrementItem('${item.id}', 50)" class="border border-neutral-800 hover:border-neutral-600 px-2 py-0.5 text-xs font-mono">+50</button>
-                <button onclick="completeItem('${item.id}')" title="Compléter" class="border border-neutral-800 hover:border-emerald-500 hover:text-emerald-400 px-2 py-0.5 text-xs ml-1">✓</button>
-                <button onclick="removeItem('${item.id}')" title="Supprimer" class="text-neutral-600 hover:text-red-400 px-1.5 py-0.5 text-xs">✕</button>
+                  class="w-16 mc-slot px-1.5 py-1 text-center text-xs text-white focus:outline-none" />
+                <button onclick="editItemNeed('${item.id}')" title="Modifier le total requis"
+                  class="text-xs text-neutral-400 hover:text-white px-1 underline decoration-dotted cursor-pointer">/ ${item.need}</button>
+                <button onclick="incrementItem('${item.id}', 1)" class="mc-btn px-2 py-1 text-xs cursor-pointer">+1</button>
+                <button onclick="incrementItem('${item.id}', 16)" class="mc-btn px-2 py-1 text-xs cursor-pointer">+16</button>
+                <button onclick="incrementItem('${item.id}', 64)" class="mc-btn px-2 py-1 text-xs cursor-pointer">+64</button>
+                ${item.need >= 1728 ? `<button onclick="incrementItem('${item.id}', 1728)" title="+1 Shulker Box (1728)" class="mc-btn px-2 py-1 text-xs text-purple-300 cursor-pointer">+1728</button>` : ''}
+                <button onclick="completeItem('${item.id}')" title="${dict.fillBtn}" class="mc-btn-green px-2 py-1 text-xs ml-1 cursor-pointer">✓</button>
+                <button onclick="removeItem('${item.id}')" class="mc-btn px-2 py-1 text-xs text-neutral-400 hover:text-red-400 cursor-pointer">✕</button>
               </div>
             </div>
 
-            <div class="w-full bg-neutral-900 h-0.5">
-              <div class="${isDone ? 'bg-emerald-500' : 'bg-white'} h-0.5 transition-all duration-200" style="width: ${pct}%"></div>
+            ${isPickerOpen ? `
+              <div class="p-2.5 bg-[#141414] border border-[#333] space-y-2">
+                <input type="text" placeholder="${dict.pickerPlaceholder}"
+                  oninput="searchIconForItem('${item.id}', this.value)"
+                  class="w-full mc-slot px-2.5 py-1.5 text-xs text-white focus:outline-none" />
+                <div id="pickerResults_${item.id}" class="flex flex-wrap gap-1.5"></div>
+              </div>
+            ` : ''}
+
+            <div class="mc-xp-track w-full h-1.5">
+              <div class="mc-xp-fill h-full transition-all duration-200" style="width: ${pct}%"></div>
             </div>
           </div>
         `;
@@ -465,6 +1530,7 @@
     }
 
     render();
+    loadMinecraftTextures();
   </script>
 </body>
 </html>
