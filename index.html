@@ -169,7 +169,7 @@
             <div id="manualPreviewBox" class="w-9 h-9 flex items-center justify-center border-r border-[#333] shrink-0">
               <span class="text-xs text-neutral-600">?</span>
             </div>
-            <input type="text" id="manualName" autocomplete="off" placeholder="Barrel, Stone Bricks..." required
+            <input type="text" id="manualName" autocomplete="off" placeholder="Barrel, Campfire, Stone..." required
               oninput="onManualNameInput(this.value)"
               class="w-full bg-transparent px-2.5 py-2 text-xs sm:text-sm text-white focus:outline-none" />
           </div>
@@ -204,7 +204,7 @@
             <button type="button" onclick="reparseFromTextArea()" id="uiReparseBtn" class="text-[11px] text-[#80ff20] hover:underline cursor-pointer">Actualiser ↻</button>
           </div>
           <textarea id="ocrRawTextArea" rows="12" oninput="reparseFromTextArea()"
-            placeholder="Stone : 1509&#10;Stone Bricks : 1153"
+            placeholder="Barrel : 89&#10;Campfire : 12"
             class="w-full flex-1 mc-slot p-2.5 text-xs text-neutral-100 font-mono leading-relaxed focus:outline-none resize-y"></textarea>
         </div>
 
@@ -228,7 +228,7 @@
       <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b-2 border-[#161616]">
         <div class="flex items-center gap-3">
           <h2 id="uiMaterialsHeader" class="mc-font text-sm sm:text-base text-white">Matériaux requis</h2>
-          <span id="catalogStatus" class="text-xs text-neutral-500"></span>
+          <span id="catalogStatus" class="text-xs text-neutral-400"></span>
         </div>
 
         <div class="flex flex-wrap items-center gap-2">
@@ -249,7 +249,8 @@
   </main>
 
   <script>
-    const STORAGE_KEY = 'mc_base_tracker_v6';
+    const STORAGE_KEY = 'mc_base_tracker_v9';
+    const WEBISSO_ORIGIN = 'https://webisso.github.io';
     const WEBISSO_BASE = 'https://webisso.github.io/minecraft-item-icons';
 
     const I18N = {
@@ -261,15 +262,15 @@
         confirmDelete: (name) => `Supprimer le projet "${name}" ?`,
         stats: (done, total, pct) => `${done} / ${total} validés · ${pct}%`,
         texturesLoading: '(Chargement API Webisso...)',
-        texturesLoaded: (n) => `(${n} icônes)`,
-        texturesOffline: '(Hors-ligne)',
+        texturesLoaded: (n, src) => `(${src} : ${n} icônes)`,
+        texturesOffline: '(Icônes hors-ligne)',
         saved: '✓ Sauvegardé',
         dropTitle: "Importer des captures d'écran",
         dropHint: '1 ou plusieurs images · Glisser-déposer ou Ctrl+V',
         textModeBtn: 'Texte',
         browseBtn: 'Images',
         manualTitle: 'Ajouter un bloc / item manuellement',
-        placeholderName: 'Nom (ex: Barrel, Pierre taillée...)',
+        placeholderName: 'Nom (ex: Barrel, Campfire...)',
         placeholderHave: 'Stock',
         placeholderNeed: 'Requis',
         searchPlaceholder: 'Filtrer la liste...',
@@ -292,7 +293,7 @@
         validatedBadge: '✓ VALIDÉ',
         missingLabel: (txt) => `Reste : ${txt}`,
         fillBtn: 'Compléter',
-        pickerPlaceholder: 'Rechercher une icône (ex: barrel, spruce, stairs...)'
+        pickerPlaceholder: 'Rechercher une icône (ex: barrel, campfire, spruce...)'
       },
       en: {
         newProject: '+ Project',
@@ -302,15 +303,15 @@
         confirmDelete: (name) => `Delete project "${name}"?`,
         stats: (done, total, pct) => `${done} / ${total} validated · ${pct}%`,
         texturesLoading: '(Loading Webisso API...)',
-        texturesLoaded: (n) => `(${n} icons)`,
-        texturesOffline: '(Offline)',
+        texturesLoaded: (n, src) => `(${src}: ${n} icons)`,
+        texturesOffline: '(Icons offline)',
         saved: '✓ Saved',
         dropTitle: 'Upload screenshots',
         dropHint: '1 or multiple images · Drag & drop or Ctrl+V',
         textModeBtn: 'Text',
         browseBtn: 'Images',
         manualTitle: 'Add block / item manually',
-        placeholderName: 'Name (e.g. Barrel, Stone Bricks...)',
+        placeholderName: 'Name (e.g. Barrel, Campfire...)',
         placeholderHave: 'Have',
         placeholderNeed: 'Need',
         searchPlaceholder: 'Filter list...',
@@ -333,7 +334,7 @@
         validatedBadge: '✓ VALIDATED',
         missingLabel: (txt) => `Left: ${txt}`,
         fillBtn: 'Fill',
-        pickerPlaceholder: 'Search icon (e.g. barrel, spruce, stairs...)'
+        pickerPlaceholder: 'Search icon (e.g. barrel, campfire, spruce...)'
       }
     };
 
@@ -414,18 +415,19 @@
       'four': 'furnace',
       'haut fourneau': 'blast_furnace',
       'feu de camp': 'campfire',
+      'feu de camp des ames': 'soul_campfire',
       'tailleur de pierre': 'stonecutter',
       'levier': 'lever'
     };
 
     let mcCatalog = [];
     let mcCatalogById = {};
-    let selectedManualIcon = null;
-    let selectedManualFallback = null;
+    let selectedManualMatch = null;
     let activeIconPickerId = null;
     let parsedOcrItems = [];
     let currentFilter = 'all';
     let catalogState = 'loading';
+    let catalogSourceLabel = 'Webisso';
 
     let state = loadState();
 
@@ -454,13 +456,11 @@
         .trim();
     }
 
-    // Distance pondérée adaptée aux confusions visuelles de la police Minecraft (ex: rt <-> rr dans Bartel -> Barrel)
     function minecraftEditDistance(a, b) {
       if (a === b) return 0;
       if (!a.length) return b.length;
       if (!b.length) return a.length;
 
-      // Normalise les digrammes visuellement identiques en pixel art
       const canon = (s) => s
         .replace(/rt/g, 'rr')
         .replace(/rn/g, 'm')
@@ -495,68 +495,174 @@
       return matrix[cb.length][ca.length];
     }
 
-    // --- Chargement API Webisso (https://webisso.github.io/minecraft-item-icons/) ---
+    function extractEntriesFromPayload(raw) {
+      if (!raw) return [];
+      if (Array.isArray(raw)) return raw;
+      if (Array.isArray(raw.data)) return raw.data;
+      if (Array.isArray(raw.icons)) return raw.icons;
+      if (Array.isArray(raw.items)) return raw.items;
+
+      const collected = [];
+      for (const val of Object.values(raw)) {
+        if (Array.isArray(val)) collected.push(...val);
+        else if (val && typeof val === 'object') {
+          for (const subVal of Object.values(val)) {
+            if (Array.isArray(subVal)) collected.push(...subVal);
+          }
+        }
+      }
+      return collected;
+    }
+
+    // Gère proprement tous les formats de chemins Webisso (/minecraft-item-icons/..., /thumbnails/..., thumbnails/...)
+    function resolveWebissoUrl(pathOrUrl) {
+      if (!pathOrUrl) return '';
+      const str = String(pathOrUrl).trim();
+      if (/^https?:\/\//i.test(str)) return str;
+      if (str.startsWith('/minecraft-item-icons/')) {
+        return `${WEBISSO_ORIGIN}${str}`;
+      }
+      const cleanPath = str.replace(/^\/+/, '');
+      return `${WEBISSO_BASE}/${cleanPath}`;
+    }
+
+    // --- Chargement API Webisso v1 (/api/v1/icons.json) ---
     async function loadMinecraftTextures() {
       catalogState = 'loading';
       render();
 
-      try {
-        const res = await fetch(`${WEBISSO_BASE}/api.json`);
-        if (!res.ok) throw new Error('Webisso API indisponible');
-        const raw = await res.json();
-        const entries = Array.isArray(raw) ? raw : (raw.icons || raw.items || []);
+      const catalogMap = new Map();
+      let webissoCount = 0;
 
-        const catalogMap = new Map();
+      // Essaie d'abord l'endpoint officiel REST v1 statique, puis api.json en repli
+      const endpoints = [
+        `${WEBISSO_BASE}/api/v1/icons.json`,
+        `${WEBISSO_BASE}/api.json`
+      ];
 
-        // Priorité aux catégories d'items et de blocs (évite qu'un mob ou particule prenne le dessus)
-        const categoryPriority = (catSlug = '') => {
-          if (catSlug.includes('block') || catSlug.includes('item')) return 0;
-          return 1;
-        };
+      for (const endpoint of endpoints) {
+        if (webissoCount > 0) break;
+        try {
+          const res = await fetch(endpoint, { cache: 'no-cache' });
+          if (!res.ok) continue;
+          const raw = await res.json();
+          const entries = extractEntriesFromPayload(raw);
 
-        entries.sort((a, b) => categoryPriority(a.category_slug) - categoryPriority(b.category_slug));
+          // Priorité aux Blocs (20-blocks) et Items (10-items) avant particules/UI
+          const categoryPriority = (catSlug = '') => {
+            const c = String(catSlug).toLowerCase();
+            if (c.includes('block')) return 0;
+            if (c.includes('item')) return 1;
+            if (c.includes('weapon')) return 2;
+            if (c.includes('particle') || c.includes('interface') || c.includes('gui')) return 9;
+            return 5;
+          };
 
-        for (const entry of entries) {
-          if (!entry?.file || !entry?.file_slug || !entry?.category_slug) continue;
+          entries.sort((a, b) =>
+            categoryPriority(a?.category_slug || a?.category) - categoryPriority(b?.category_slug || b?.category)
+          );
 
-          const baseName = entry.file.replace(/\.(png|webp|gif|jpg)$/i, '').replace(/_/g, ' ').trim();
-          const norm = normalizeStr(baseName);
-          const cleanId = norm.replace(/\s+/g, '_');
-          if (!cleanId || catalogMap.has(cleanId)) continue;
+          for (const entry of entries) {
+            if (!entry || typeof entry !== 'object') continue;
 
-          const subPath = entry.subcategory_slug ? `${entry.subcategory_slug}/` : '';
-          const iconUrl = `${WEBISSO_BASE}/thumbnails/${entry.category_slug}/${subPath}${entry.file_slug}`;
-          const fallbackUrl = `${WEBISSO_BASE}/assets/${entry.category_slug}/${subPath}${entry.file_slug}`;
+            const rawLabel = entry.name || entry.label || entry.title || entry.file || entry.file_slug || '';
+            const baseName = String(rawLabel)
+              .replace(/\.(png|webp|gif|jpg|jpeg)$/i, '')
+              .replace(/[_-]+/g, ' ')
+              .trim();
 
-          catalogMap.set(cleanId, {
-            id: cleanId,
-            readable: baseName,
-            normReadable: norm,
-            iconUrl,
-            fallbackUrl
-          });
+            const norm = normalizeStr(baseName);
+            const cleanId = norm.replace(/\s+/g, '_');
+            if (!cleanId) continue;
+
+            let iconUrl = resolveWebissoUrl(entry.thumbnail || entry.thumb || entry.thumbnail_url || '');
+            let fallbackUrl = resolveWebissoUrl(entry.asset || entry.url || entry.asset_url || '');
+
+            if ((!iconUrl || !fallbackUrl) && entry.category_slug && (entry.file_slug || entry.file)) {
+              const rawSlug = String(entry.file_slug || entry.file).replace(/^\/+/, '');
+              const fileWithExt = /\.(png|webp|gif|jpg|jpeg)$/i.test(rawSlug) ? rawSlug : `${rawSlug}.png`;
+              const subClean = entry.subcategory_slug
+                ? `${String(entry.subcategory_slug).replace(/^\/+|\/+$/g, '')}/`
+                : '';
+              const catClean = String(entry.category_slug).replace(/^\/+|\/+$/g, '');
+
+              if (!iconUrl) {
+                iconUrl = `${WEBISSO_BASE}/thumbnails/${catClean}/${subClean}${fileWithExt}`;
+              }
+              if (!fallbackUrl) {
+                fallbackUrl = `${WEBISSO_BASE}/assets/${catClean}/${subClean}${fileWithExt}`;
+              }
+            }
+
+            if (!iconUrl && fallbackUrl) iconUrl = fallbackUrl;
+            if (!iconUrl) continue;
+
+            // Conserve la première occurrence (la plus prioritaire : 20-blocks ou 10-items)
+            if (!catalogMap.has(cleanId)) {
+              const prettyName = baseName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+              catalogMap.set(cleanId, {
+                id: cleanId,
+                readable: prettyName,
+                normReadable: norm,
+                category: entry.category_slug || '',
+                iconUrl,
+                fallbackUrl,
+                backupUrl: ''
+              });
+              webissoCount++;
+            }
+          }
+        } catch (err) {
+          console.warn('Webisso endpoint warning:', endpoint, err);
         }
-
-        mcCatalog = Array.from(catalogMap.values());
-        mcCatalogById = {};
-        for (const item of mcCatalog) {
-          mcCatalogById[item.id] = item;
-        }
-
-        catalogState = mcCatalog.length > 0 ? 'loaded' : 'offline';
-      } catch (err) {
-        console.error(err);
-        catalogState = 'offline';
       }
 
-      // Associe les icônes Webisso aux items déjà sauvegardés dans les projets
+      // Catalogue de secours CDN uniquement si une icône précise est absente
+      try {
+        const res3d = await fetch('https://cdn.jsdelivr.net/npm/minecraft-icon-items@0.4.5/data/itemsByName.json');
+        if (res3d.ok) {
+          const data3d = await res3d.json();
+          for (const item of Object.values(data3d)) {
+            if (!item?.name || !item?.icon) continue;
+            const norm = normalizeStr(item.name);
+            const cleanId = norm.replace(/\s+/g, '_');
+            const dataUri = `data:image/png;base64,${item.icon}`;
+
+            if (catalogMap.has(cleanId)) {
+              catalogMap.get(cleanId).backupUrl = dataUri;
+            } else {
+              catalogMap.set(cleanId, {
+                id: cleanId,
+                readable: item.name,
+                normReadable: norm,
+                category: 'cdn',
+                iconUrl: dataUri,
+                fallbackUrl: '',
+                backupUrl: ''
+              });
+            }
+          }
+        }
+      } catch {}
+
+      mcCatalog = Array.from(catalogMap.values());
+      mcCatalogById = {};
+      for (const item of mcCatalog) {
+        mcCatalogById[item.id] = item;
+      }
+
+      catalogSourceLabel = webissoCount > 0 ? 'Webisso' : 'CDN';
+      catalogState = mcCatalog.length > 0 ? 'loaded' : 'offline';
+
+      // Actualise automatiquement les icônes de tous les projets enregistrés
       let updated = false;
       for (const proj of state.projects) {
         for (const item of proj.items) {
           const match = resolveMinecraftItem(item.name);
-          if (match && (!item.iconUrl || !item.iconUrl.includes('webisso.github.io'))) {
+          if (match) {
             item.iconUrl = match.iconUrl;
             item.fallbackUrl = match.fallbackUrl;
+            item.backupUrl = match.backupUrl;
             updated = true;
           }
         }
@@ -575,14 +681,14 @@
         return mcCatalogById[FR_ALIASES[norm]];
       }
 
-      // 2. ID exact ou nom anglais exact
+      // 2. Correspondance exacte ID ou nom lisible
       const asId = norm.replace(/\s+/g, '_');
       if (mcCatalogById[asId]) return mcCatalogById[asId];
 
       const exactReadable = mcCatalog.find(i => i.normReadable === norm);
       if (exactReadable) return exactReadable;
 
-      // 3. Correspondance floue intelligente (ex: "Bartel" -> "Barrel", "Stripped Spruce Hood" -> "Stripped Spruce Wood")
+      // 3. Correction fautes de frappe OCR (même nombre de mots)
       const inputWords = norm.split(' ');
       if (norm.length >= 4) {
         let bestMatch = null;
@@ -603,10 +709,37 @@
         if (bestMatch) return bestMatch;
       }
 
+      // 4. Recherche de variantes multi-mots (ex: "barrel" -> "Barrel Closed", "campfire" -> "Lit Campfire")
+      const secondaryWords = new Set(['open', 'unlit', 'off', 'top', 'bottom', 'side', 'front', 'back', 'empty', 'broken', 'inside', 'particle']);
+      const variantCandidates = mcCatalog.filter(item => {
+        const wList = item.normReadable.split(' ');
+        return inputWords.every(w => wList.includes(w));
+      });
+
+      if (variantCandidates.length > 0) {
+        variantCandidates.sort((a, b) => {
+          const aWords = a.normReadable.split(' ');
+          const bWords = b.normReadable.split(' ');
+          const aPenalty = aWords.some(w => secondaryWords.has(w)) ? 100 : 0;
+          const bPenalty = bWords.some(w => secondaryWords.has(w)) ? 100 : 0;
+          return (aPenalty + a.normReadable.length) - (bPenalty + b.normReadable.length);
+        });
+        const bestVariant = variantCandidates[0];
+        const titleCased = norm.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+        return {
+          id: bestVariant.id,
+          readable: titleCased,
+          normReadable: norm,
+          iconUrl: bestVariant.iconUrl,
+          fallbackUrl: bestVariant.fallbackUrl,
+          backupUrl: bestVariant.backupUrl
+        };
+      }
+
       return null;
     }
 
-    function searchMinecraftCatalog(query, limit = 12) {
+    function searchMinecraftCatalog(query, limit = 30) {
       const norm = normalizeStr(query);
       if (!norm || !mcCatalog.length) return [];
 
@@ -633,22 +766,54 @@
       return results;
     }
 
-    function renderIconImg(iconUrl, fallbackUrl, sizeClass = 'w-8 h-8') {
-      if (!iconUrl) return `<span class="text-xs text-neutral-600">?</span>`;
-      const fb = escapeHtml(fallbackUrl || '');
-      return `<img src="${escapeHtml(iconUrl)}" data-fallback="${fb}" alt="" class="${sizeClass} mc-pixel object-contain"
-        onerror="if(this.dataset.fallback && this.src !== this.dataset.fallback){this.src=this.dataset.fallback;}else{this.style.display='none';}" />`;
+    function handleIconError(imgEl) {
+      const step = parseInt(imgEl.dataset.step || '0', 10);
+      const fb1 = imgEl.dataset.fb1;
+      const fb2 = imgEl.dataset.fb2;
+
+      if (step === 0 && fb1 && imgEl.src !== fb1) {
+        imgEl.dataset.step = '1';
+        imgEl.src = fb1;
+        return;
+      }
+      if (step <= 1 && fb2 && imgEl.src !== fb2) {
+        imgEl.dataset.step = '2';
+        imgEl.src = fb2;
+        return;
+      }
+      const span = document.createElement('span');
+      span.className = 'text-xs text-neutral-600';
+      span.textContent = '?';
+      imgEl.replaceWith(span);
     }
 
-    // --- État & Sauvegarde ---
+    function renderIconImg(iconUrl, fallbackUrl = '', backupUrl = '', sizeClass = 'w-8 h-8') {
+      if (!iconUrl && !fallbackUrl && !backupUrl) {
+        return `<span class="text-xs text-neutral-600">?</span>`;
+      }
+      const primary = iconUrl || fallbackUrl || backupUrl;
+      return `<img src="${escapeHtml(primary)}"
+        data-step="0"
+        data-fb1="${escapeHtml(fallbackUrl || '')}"
+        data-fb2="${escapeHtml(backupUrl || '')}"
+        alt=""
+        loading="lazy"
+        class="${sizeClass} mc-pixel object-contain"
+        onerror="handleIconError(this)" />`;
+    }
+
+    // --- État & Sauvegarde (avec migration automatique des versions précédentes) ---
     function loadState() {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (!parsed.lang) parsed.lang = 'fr';
-          return parsed;
-        } catch {}
+      const keysToTry = [STORAGE_KEY, 'mc_base_tracker_v8', 'mc_base_tracker_v7', 'mc_base_tracker_v6'];
+      for (const key of keysToTry) {
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (!parsed.lang) parsed.lang = 'fr';
+            return parsed;
+          } catch {}
+        }
       }
       return {
         lang: 'fr',
@@ -715,13 +880,12 @@
       const previewBox = document.getElementById('manualPreviewBox');
 
       const directMatch = resolveMinecraftItem(val);
-      selectedManualIcon = directMatch ? directMatch.iconUrl : null;
-      selectedManualFallback = directMatch ? directMatch.fallbackUrl : null;
+      selectedManualMatch = directMatch || null;
       previewBox.innerHTML = directMatch
-        ? renderIconImg(directMatch.iconUrl, directMatch.fallbackUrl, 'w-6 h-6')
+        ? renderIconImg(directMatch.iconUrl, directMatch.fallbackUrl, directMatch.backupUrl, 'w-6 h-6')
         : `<span class="text-xs text-neutral-600">?</span>`;
 
-      const suggestions = searchMinecraftCatalog(val, 10);
+      const suggestions = searchMinecraftCatalog(val, 15);
       if (!suggestions.length) {
         dropdown.classList.add('hidden');
         return;
@@ -729,22 +893,23 @@
 
       dropdown.classList.remove('hidden');
       dropdown.innerHTML = suggestions.map(s => `
-        <button type="button" onclick="selectAutocompleteItem('${escapeHtml(s.readable)}', '${escapeHtml(s.iconUrl)}', '${escapeHtml(s.fallbackUrl)}')"
+        <button type="button" onclick="selectAutocompleteItemById('${escapeHtml(s.id)}')"
           class="w-full flex items-center justify-between px-3 py-2 text-left text-xs hover:bg-[#2a2a2a] transition cursor-pointer">
           <div class="flex items-center gap-3">
-            ${renderIconImg(s.iconUrl, s.fallbackUrl, 'w-6 h-6')}
+            ${renderIconImg(s.iconUrl, s.fallbackUrl, s.backupUrl, 'w-6 h-6')}
             <span class="text-white">${escapeHtml(s.readable)}</span>
           </div>
-          <span class="text-neutral-500">${escapeHtml(s.id)}</span>
+          <span class="text-neutral-500">${escapeHtml(s.category || s.id)}</span>
         </button>
       `).join('');
     }
 
-    function selectAutocompleteItem(name, iconUrl, fallbackUrl) {
-      document.getElementById('manualName').value = name;
-      selectedManualIcon = iconUrl;
-      selectedManualFallback = fallbackUrl;
-      document.getElementById('manualPreviewBox').innerHTML = renderIconImg(iconUrl, fallbackUrl, 'w-6 h-6');
+    function selectAutocompleteItemById(id) {
+      const entry = mcCatalogById[id];
+      if (!entry) return;
+      document.getElementById('manualName').value = entry.readable;
+      selectedManualMatch = entry;
+      document.getElementById('manualPreviewBox').innerHTML = renderIconImg(entry.iconUrl, entry.fallbackUrl, entry.backupUrl, 'w-6 h-6');
       document.getElementById('autocompleteDropdown').classList.add('hidden');
     }
 
@@ -762,21 +927,17 @@
       const need = parseInt(document.getElementById('manualNeed').value, 10) || 1;
       if (!name) return;
 
-      const resolved = selectedManualIcon
-        ? { iconUrl: selectedManualIcon, fallbackUrl: selectedManualFallback }
-        : resolveMinecraftItem(name);
-
-      upsertMaterial(name, have, need, resolved?.iconUrl || '', resolved?.fallbackUrl || '');
+      const resolved = selectedManualMatch || resolveMinecraftItem(name);
+      upsertMaterial(name, have, need, resolved?.iconUrl || '', resolved?.fallbackUrl || '', resolved?.backupUrl || '');
 
       e.target.reset();
-      selectedManualIcon = null;
-      selectedManualFallback = null;
+      selectedManualMatch = null;
       document.getElementById('manualPreviewBox').innerHTML = `<span class="text-xs text-neutral-600">?</span>`;
       document.getElementById('autocompleteDropdown').classList.add('hidden');
       saveState();
     }
 
-    function upsertMaterial(name, have, need, iconUrl = '', fallbackUrl = '') {
+    function upsertMaterial(name, have, need, iconUrl = '', fallbackUrl = '', backupUrl = '') {
       const proj = getActiveProject();
       const existing = proj.items.find(i => normalizeStr(i.name) === normalizeStr(name));
       if (existing) {
@@ -785,16 +946,18 @@
         if (!existing.iconUrl && iconUrl) {
           existing.iconUrl = iconUrl;
           existing.fallbackUrl = fallbackUrl;
+          existing.backupUrl = backupUrl;
         }
       } else {
-        const autoMatch = iconUrl ? { iconUrl, fallbackUrl } : resolveMinecraftItem(name);
+        const autoMatch = iconUrl ? { iconUrl, fallbackUrl, backupUrl } : resolveMinecraftItem(name);
         proj.items.push({
           id: 'item_' + Date.now() + Math.random(),
           name: autoMatch?.readable || name,
           have,
           need,
           iconUrl: autoMatch?.iconUrl || '',
-          fallbackUrl: autoMatch?.fallbackUrl || ''
+          fallbackUrl: autoMatch?.fallbackUrl || '',
+          backupUrl: autoMatch?.backupUrl || ''
         });
       }
     }
@@ -844,27 +1007,34 @@
     function toggleIconPicker(id) {
       activeIconPickerId = activeIconPickerId === id ? null : id;
       render();
+      if (activeIconPickerId) {
+        const proj = getActiveProject();
+        const item = proj.items.find(i => i.id === activeIconPickerId);
+        if (item) searchIconForItem(activeIconPickerId, item.name);
+      }
     }
 
     function searchIconForItem(itemId, query) {
       const container = document.getElementById(`pickerResults_${itemId}`);
       if (!container) return;
-      const results = searchMinecraftCatalog(query, 18);
+      const results = searchMinecraftCatalog(query, 30);
       container.innerHTML = results.map(r => `
-        <button type="button" onclick="applyIconToItem('${itemId}', '${escapeHtml(r.iconUrl)}', '${escapeHtml(r.fallbackUrl)}')"
-          title="${escapeHtml(r.readable)}"
+        <button type="button" onclick="applyIconToItemById('${itemId}', '${escapeHtml(r.id)}')"
+          title="${escapeHtml(r.readable)} (${escapeHtml(r.category)})"
           class="w-9 h-9 mc-slot flex items-center justify-center cursor-pointer">
-          ${renderIconImg(r.iconUrl, r.fallbackUrl, 'w-6 h-6')}
+          ${renderIconImg(r.iconUrl, r.fallbackUrl, r.backupUrl, 'w-6 h-6')}
         </button>
       `).join('');
     }
 
-    function applyIconToItem(itemId, iconUrl, fallbackUrl) {
+    function applyIconToItemById(itemId, catalogId) {
       const proj = getActiveProject();
       const item = proj.items.find(i => i.id === itemId);
-      if (item) {
-        item.iconUrl = iconUrl;
-        item.fallbackUrl = fallbackUrl;
+      const entry = mcCatalogById[catalogId];
+      if (item && entry) {
+        item.iconUrl = entry.iconUrl;
+        item.fallbackUrl = entry.fallbackUrl;
+        item.backupUrl = entry.backupUrl;
       }
       activeIconPickerId = null;
       saveState();
@@ -874,7 +1044,6 @@
     // OCR SPÉCIALISÉ MINECRAFT : ISOLATION TEXTE + DÉCOUPE LIGNES + DOUBLE PASSE
     // =========================================================================
 
-    // Convertit l'image en texte noir lissé sur fond blanc pur (supprime fond sombre + ombre portée)
     function prepareCleanWhiteBgCanvas(file) {
       return new Promise((resolve) => {
         const img = new Image();
@@ -885,7 +1054,6 @@
           const origW = img.width;
           const origH = img.height;
 
-          // Étape A : Extraction des pixels du texte à la résolution native (évite les artefacts d'ombre)
           const rawCanvas = document.createElement('canvas');
           rawCanvas.width = origW;
           rawCanvas.height = origH;
@@ -905,7 +1073,6 @@
             const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
             let out;
             if (isDarkTheme) {
-              // Seul le texte clair (> 140) devient noir ; fond sombre et ombre (<= 140) deviennent blanc pur
               if (lum <= 140) out = 255;
               else if (lum >= 205) out = 0;
               else out = Math.round(255 - ((lum - 140) / 65) * 255);
@@ -919,7 +1086,6 @@
           }
           rawCtx.putImageData(imgData, 0, 0);
 
-          // Étape B : Agrandissement x3 avec lissage doux pour que Tesseract lise le 0 barré et les lettres sans erreur
           const scale = origW < 1300 ? 3 : 2;
           const scaledCanvas = document.createElement('canvas');
           scaledCanvas.width = origW * scale;
@@ -968,7 +1134,6 @@
         ];
       }
 
-      // Mode Auto : cherche le couloir vertical blanc au milieu (42% - 58%)
       const data = canvas.getContext('2d').getImageData(0, 0, w, h).data;
       const yStart = Math.floor(h * 0.04);
       const yEnd = Math.floor(h * 0.96);
@@ -1013,13 +1178,11 @@
       return [canvas];
     }
 
-    // Détecte les bandes horizontales (chaque ligne d'item) et la séparation Nom | Quantité
     function analyzeColumnLayout(colCanvas) {
       const w = colCanvas.width;
       const h = colCanvas.height;
       const data = colCanvas.getContext('2d').getImageData(0, 0, w, h).data;
 
-      // 1. Masque les 12.5% à gauche (emplacement de l'icône 3D) pour calculer la projection verticale du texte
       const iconCutoffX = Math.floor(w * 0.125);
       const colProj = new Int32Array(w);
       for (let y = 0; y < h; y++) {
@@ -1028,7 +1191,6 @@
         }
       }
 
-      // Cherche s'il existe un couloir vide entre la colonne des noms et la colonne des chiffres (entre 58% et 86% de la largeur)
       let splitNumX = -1;
       let bestGapLen = 0;
       let currGapStart = -1;
@@ -1048,7 +1210,6 @@
         }
       }
 
-      // Vérifie qu'il y a bien des chiffres à droite de splitNumX
       let hasRightNumbers = false;
       if (splitNumX !== -1 && bestGapLen >= Math.max(8, Math.floor(w * 0.025))) {
         let rightInk = 0;
@@ -1056,7 +1217,6 @@
         if (rightInk > 25) hasRightNumbers = true;
       }
 
-      // 2. Détection de chaque ligne horizontale (y0 -> y1)
       const rowProj = new Int32Array(h);
       for (let y = 0; y < h; y++) {
         let ink = 0;
@@ -1093,6 +1253,7 @@
         .replace(/\bHall\b/gi, 'Wall')
         .replace(/\bStab\b/gi, 'Slab')
         .replace(/\bBartel\b/gi, 'Barrel')
+        .replace(/\bCamplire\b/gi, 'Campfire')
         .replace(/\b0ak\b/gi, 'Oak')
         .replace(/\b1og\b/gi, 'Log')
         .replace(/\b1ron\b/gi, 'Iron')
@@ -1133,7 +1294,6 @@
           continue;
         }
 
-        // Format fraction : "Stone Bricks : 120/512"
         const fracMatch = line.match(/^(.+?)\s*(?:[:\-])?\s*(\d+)\s*\/\s*(\d+)$/);
         if (fracMatch) {
           const name = cleanItemLabel(fracMatch[1]);
@@ -1141,24 +1301,22 @@
           const need = parseInt(fracMatch[3], 10);
           if (name && need > 0) {
             const match = resolveMinecraftItem(name);
-            results.push({ name, have, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '' });
+            results.push({ name, have, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '', backupUrl: match?.backupUrl || '' });
             continue;
           }
         }
 
-        // Format "64 Oak Planks"
         const prefixMatch = line.match(/^[xX×]?\s*(\d+)\s*[xX×]?\s+([a-zA-ZÀ-ÿ].+)$/);
         if (prefixMatch) {
           const need = parseInt(prefixMatch[1], 10);
           const name = cleanItemLabel(prefixMatch[2]);
           if (name && need > 0) {
             const match = resolveMinecraftItem(name);
-            results.push({ name, have: 0, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '' });
+            results.push({ name, have: 0, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '', backupUrl: match?.backupUrl || '' });
             continue;
           }
         }
 
-        // Format "Stone : 1509" ou "Stone 1509"
         const tokens = line.split(/\s+/);
         if (tokens.length >= 2) {
           const lastToken = tokens[tokens.length - 1].replace(/^[xX×:]+/, '');
@@ -1168,7 +1326,7 @@
             const name = cleanItemLabel(rawName);
             if (name && need > 0) {
               const match = resolveMinecraftItem(name);
-              results.push({ name, have: 0, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '' });
+              results.push({ name, have: 0, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '', backupUrl: match?.backupUrl || '' });
               continue;
             }
           }
@@ -1262,14 +1420,12 @@
             const layout = analyzeColumnLayout(col);
 
             if (layout.splitNumX !== -1 && layout.rows.length > 0) {
-              // Mode haute précision : chaque ligne est découpée en [Nom à gauche] + [Chiffres à droite]
               for (let rIdx = 0; rIdx < layout.rows.length; rIdx++) {
                 const row = layout.rows[rIdx];
                 const padY = Math.max(4, Math.round((row.y1 - row.y0) * 0.25));
                 const y0 = row.y0 - padY;
                 const y1 = row.y1 + padY;
 
-                // 1. Lecture du Nom (lettres uniquement, sans icône ni chiffre)
                 const nameCrop = cropCanvasRect(col, layout.iconCutoffX, y0, layout.splitNumX, y1, 8);
                 await worker.setParameters({
                   tessedit_pageseg_mode: '7',
@@ -1278,7 +1434,6 @@
                 const nameRes = await worker.recognize(nameCrop);
                 const cleanName = cleanItemLabel(nameRes.data.text);
 
-                // 2. Lecture de la Quantité (chiffres uniquement)
                 const numCrop = cropCanvasRect(col, layout.splitNumX, y0, col.width, y1, 8);
                 await worker.setParameters({
                   tessedit_pageseg_mode: '7',
@@ -1298,7 +1453,6 @@
                 progressBar.style.width = overallPct + '%';
               }
             } else {
-              // Fallback standard pour formats libres (ex: "64 Oak Planks")
               await worker.setParameters({
                 tessedit_pageseg_mode: '6',
                 tessedit_char_whitelist: ''
@@ -1330,6 +1484,7 @@
       const match = resolveMinecraftItem(val);
       parsedOcrItems[idx].iconUrl = match?.iconUrl || '';
       parsedOcrItems[idx].fallbackUrl = match?.fallbackUrl || '';
+      parsedOcrItems[idx].backupUrl = match?.backupUrl || '';
       renderOcrReview();
     }
 
@@ -1344,7 +1499,7 @@
         <div class="grid grid-cols-12 gap-1.5 items-center bg-[#161616] p-1.5 border border-[#2a2a2a]">
           <div class="col-span-6 flex items-center mc-slot">
             <div class="w-8 h-8 flex items-center justify-center border-r border-[#333] shrink-0">
-              ${renderIconImg(item.iconUrl, item.fallbackUrl, 'w-6 h-6')}
+              ${renderIconImg(item.iconUrl, item.fallbackUrl, item.backupUrl, 'w-6 h-6')}
             </div>
             <input type="text" value="${escapeHtml(item.name)}" placeholder="Item"
               onchange="updateOcrItemName(${idx}, this.value)"
@@ -1362,7 +1517,7 @@
     }
 
     function addParsedRow() {
-      parsedOcrItems.push({ name: '', have: 0, need: 1, iconUrl: '', fallbackUrl: '' });
+      parsedOcrItems.push({ name: '', have: 0, need: 1, iconUrl: '', fallbackUrl: '', backupUrl: '' });
       renderOcrReview();
     }
 
@@ -1374,7 +1529,7 @@
     function confirmOcrItems() {
       for (const item of parsedOcrItems) {
         if (item.name && item.name.trim()) {
-          upsertMaterial(item.name.trim(), item.have || 0, item.need || 1, item.iconUrl || '', item.fallbackUrl || '');
+          upsertMaterial(item.name.trim(), item.have || 0, item.need || 1, item.iconUrl || '', item.fallbackUrl || '', item.backupUrl || '');
         }
       }
       closeOcrReview();
@@ -1433,9 +1588,16 @@
       });
 
       const catEl = document.getElementById('catalogStatus');
-      if (catalogState === 'loading') catEl.textContent = dict.texturesLoading;
-      else if (catalogState === 'loaded') catEl.textContent = dict.texturesLoaded(mcCatalog.length);
-      else catEl.textContent = dict.texturesOffline;
+      if (catalogState === 'loading') {
+        catEl.textContent = dict.texturesLoading;
+        catEl.className = 'text-xs text-neutral-400';
+      } else if (catalogState === 'loaded') {
+        catEl.textContent = dict.texturesLoaded(mcCatalog.length, catalogSourceLabel);
+        catEl.className = 'text-xs text-[#80ff20]';
+      } else {
+        catEl.textContent = dict.texturesOffline;
+        catEl.className = 'text-xs text-red-400';
+      }
 
       const select = document.getElementById('projectSelect');
       select.innerHTML = state.projects.map(p =>
@@ -1483,7 +1645,7 @@
               <div class="flex items-center gap-3 min-w-0">
                 <button type="button" onclick="toggleIconPicker('${item.id}')"
                   class="w-11 h-11 mc-slot flex items-center justify-center shrink-0 cursor-pointer">
-                  ${renderIconImg(item.iconUrl, item.fallbackUrl, 'w-8 h-8')}
+                  ${renderIconImg(item.iconUrl, item.fallbackUrl, item.backupUrl, 'w-8 h-8')}
                 </button>
 
                 <div class="min-w-0">
@@ -1514,7 +1676,7 @@
 
             ${isPickerOpen ? `
               <div class="p-2.5 bg-[#141414] border border-[#333] space-y-2">
-                <input type="text" placeholder="${dict.pickerPlaceholder}"
+                <input type="text" value="${escapeHtml(item.name)}" placeholder="${dict.pickerPlaceholder}"
                   oninput="searchIconForItem('${item.id}', this.value)"
                   class="w-full mc-slot px-2.5 py-1.5 text-xs text-white focus:outline-none" />
                 <div id="pickerResults_${item.id}" class="flex flex-wrap gap-1.5"></div>
