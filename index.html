@@ -51,6 +51,43 @@
     .mc-slot:hover {
       background-color: #1f1f1f;
     }
+    .mc-chest-gui {
+      background-color: #c6c6c6;
+      border: 3px solid #000000;
+      box-shadow:
+        inset 3px 3px 0px #ffffff,
+        inset -3px -3px 0px #555555;
+      color: #3f3f3f;
+    }
+    .mc-chest-slot {
+      background-color: #8b8b8b;
+      border-top: 2px solid #373737;
+      border-left: 2px solid #373737;
+      border-right: 2px solid #ffffff;
+      border-bottom: 2px solid #ffffff;
+      position: relative;
+    }
+    .mc-chest-slot:hover {
+      background-color: #a6a6a6;
+    }
+    .mc-stack-num {
+      font-family: 'Silkscreen', monospace;
+      font-size: 11px;
+      line-height: 1;
+      color: #ffffff;
+      text-shadow: 2px 2px 0px #3f3f3f;
+      pointer-events: none;
+    }
+    .mc-build-cell {
+      background-color: #141414;
+      border: 1px solid #262626;
+      position: relative;
+      user-select: none;
+    }
+    .mc-build-cell:hover {
+      outline: 1px solid #80ff20;
+      z-index: 5;
+    }
     .mc-btn {
       background-color: #3a3a3a;
       color: #f0f0f0;
@@ -163,19 +200,21 @@
 
       <!-- Ajout manuel rapide -->
       <section class="lg:col-span-6 mc-panel p-4 flex flex-col justify-center relative">
-        <p id="uiManualTitle" class="mc-font text-xs text-neutral-300 mb-2">Ajouter un bloc / item manuellement</p>
+        <p id="uiManualTitle" class="mc-font text-xs text-neutral-300 mb-2">Ajouter un bloc / item (calculs autorisés : 3+2, 64*4)</p>
         <form onsubmit="addManualItem(event)" class="grid grid-cols-12 gap-2">
           <div class="col-span-6 flex items-center mc-slot">
             <div id="manualPreviewBox" class="w-9 h-9 flex items-center justify-center border-r border-[#333] shrink-0">
               <span class="text-xs text-neutral-600">?</span>
             </div>
-            <input type="text" id="manualName" autocomplete="off" placeholder="Barrel, Campfire, Stone..." required
+            <input type="text" id="manualName" autocomplete="off" placeholder="Stone, Barrel, Campfire..." required
               oninput="onManualNameInput(this.value)"
               class="w-full bg-transparent px-2.5 py-2 text-xs sm:text-sm text-white focus:outline-none" />
           </div>
-          <input type="number" id="manualHave" placeholder="Stock" min="0"
+          <input type="text" id="manualHave" inputmode="text" placeholder="Stock (3+2)"
+            onblur="previewMathInput(this, true)"
             class="col-span-2 mc-slot px-2 py-2 text-xs sm:text-sm text-white focus:outline-none" />
-          <input type="number" id="manualNeed" placeholder="Requis" min="1" required
+          <input type="text" id="manualNeed" inputmode="text" placeholder="Requis (64*2)" required
+            onblur="previewMathInput(this, false)"
             class="col-span-2 mc-slot px-2 py-2 text-xs sm:text-sm text-white focus:outline-none" />
           <button id="uiAddManualBtn" type="submit" class="col-span-2 mc-btn-green mc-font text-xs py-2 cursor-pointer">+</button>
         </form>
@@ -204,7 +243,7 @@
             <button type="button" onclick="reparseFromTextArea()" id="uiReparseBtn" class="text-[11px] text-[#80ff20] hover:underline cursor-pointer">Actualiser ↻</button>
           </div>
           <textarea id="ocrRawTextArea" rows="12" oninput="reparseFromTextArea()"
-            placeholder="Barrel : 89&#10;Campfire : 12"
+            placeholder="Stone : 1509&#10;Barrel : 89"
             class="w-full flex-1 mc-slot p-2.5 text-xs text-neutral-100 font-mono leading-relaxed focus:outline-none resize-y"></textarea>
         </div>
 
@@ -223,15 +262,23 @@
       </div>
     </section>
 
-    <!-- LISTE DES MATÉRIAUX REQUIS -->
+    <!-- SECTION PRINCIPALE : LISTE / COFFRES / CONSTRUCTION -->
     <section class="mc-panel p-4 space-y-4">
       <div class="flex flex-wrap items-center justify-between gap-3 pb-3 border-b-2 border-[#161616]">
-        <div class="flex items-center gap-3">
-          <h2 id="uiMaterialsHeader" class="mc-font text-sm sm:text-base text-white">Matériaux requis</h2>
+        <div class="flex flex-wrap items-center gap-3">
+          <!-- Switch Vue Liste / Vue Coffres / Vue Construction -->
+          <div class="flex border-2 border-[#0e0e0e]">
+            <button id="viewModeListBtn" onclick="setViewMode('list')" class="mc-font text-xs px-3 py-1.5 cursor-pointer">Liste</button>
+            <button id="viewModeChestBtn" onclick="setViewMode('chest')" class="mc-font text-xs px-3 py-1.5 cursor-pointer">Coffres</button>
+            <button id="viewModeBuildBtn" onclick="setViewMode('build')" class="mc-font text-xs px-3 py-1.5 cursor-pointer">Construction</button>
+          </div>
+
           <span id="catalogStatus" class="text-xs text-neutral-400"></span>
+          <button type="button" onclick="refreshAllProjectIcons(true)" title="Recharger les icônes PrismarineJS" class="text-xs text-neutral-400 hover:text-[#80ff20] px-1.5 py-0.5 border border-[#333] cursor-pointer">↻</button>
         </div>
 
-        <div class="flex flex-wrap items-center gap-2">
+        <!-- Contrôles Vue Liste -->
+        <div id="listViewControls" class="flex flex-wrap items-center gap-2">
           <input type="text" id="listSearchInput" oninput="render()" placeholder="Filtrer la liste..."
             class="mc-slot px-2.5 py-1.5 text-xs text-white focus:outline-none w-40 sm:w-52" />
 
@@ -241,17 +288,53 @@
             <button id="filterDone" onclick="setFilter('done')" class="px-3 py-1.5 border border-[#0e0e0e] cursor-pointer">Validés</button>
           </div>
         </div>
+
+        <!-- Contrôles Vue Coffres -->
+        <div id="chestViewControls" class="hidden flex flex-wrap items-center gap-2 text-xs">
+          <div class="flex border border-[#0e0e0e]">
+            <button id="chestTypeDoubleBtn" onclick="setChestSlots(54)" class="px-2.5 py-1.5 cursor-pointer">Double Coffre (54)</button>
+            <button id="chestTypeSingleBtn" onclick="setChestSlots(27)" class="px-2.5 py-1.5 cursor-pointer">Coffre Simple (27)</button>
+          </div>
+
+          <select id="chestSourceSelect" onchange="setChestSource(this.value)" class="mc-slot px-2.5 py-1.5 text-xs text-white focus:outline-none">
+            <option value="need">Quantité : Total requis</option>
+            <option value="have">Quantité : En stock</option>
+            <option value="missing">Quantité : Restant à farmer</option>
+          </select>
+        </div>
+
+        <!-- Contrôles Vue Construction -->
+        <div id="buildViewControls" class="hidden flex flex-wrap items-center gap-2 text-xs">
+          <label class="flex items-center gap-1.5 text-neutral-300 cursor-pointer select-none px-2 py-1 bg-[#181818] border border-[#0e0e0e]">
+            <input type="checkbox" id="onionSkinToggle" onchange="toggleOnionSkin(this.checked)" class="accent-[#80ff20]" />
+            <span id="uiOnionSkinLabel">Aperçu couche Y-1</span>
+          </label>
+
+          <select id="gridSizeSelect" onchange="changeBlueprintSize(this.value)" class="mc-slot px-2.5 py-1.5 text-xs text-white focus:outline-none">
+            <option value="8">Grille 8×8</option>
+            <option value="12">Grille 12×12</option>
+            <option value="16" selected>Grille 16×16</option>
+            <option value="24">Grille 24×24</option>
+            <option value="32">Grille 32×32</option>
+          </select>
+        </div>
       </div>
 
+      <!-- CONTENEUR VUE LISTE -->
       <div id="materialsList" class="grid grid-cols-1 xl:grid-cols-2 gap-3"></div>
+
+      <!-- CONTENEUR VUE COFFRES -->
+      <div id="chestViewContainer" class="hidden space-y-4"></div>
+
+      <!-- CONTENEUR VUE CONSTRUCTION (COUCHE PAR COUCHE) -->
+      <div id="buildViewContainer" class="hidden space-y-4"></div>
     </section>
 
   </main>
 
   <script>
-    const STORAGE_KEY = 'mc_base_tracker_v9';
-    const WEBISSO_ORIGIN = 'https://webisso.github.io';
-    const WEBISSO_BASE = 'https://webisso.github.io/minecraft-item-icons';
+    const STORAGE_KEY = 'mc_base_tracker_v12';
+    const PRISMARINE_CDN = 'https://cdn.jsdelivr.net/gh/PrismarineJS/minecraft-assets@master/data/1.21.4';
 
     const I18N = {
       fr: {
@@ -261,17 +344,17 @@
         alertLastProject: 'Tu dois garder au moins un projet.',
         confirmDelete: (name) => `Supprimer le projet "${name}" ?`,
         stats: (done, total, pct) => `${done} / ${total} validés · ${pct}%`,
-        texturesLoading: '(Chargement API Webisso...)',
-        texturesLoaded: (n, src) => `(${src} : ${n} icônes)`,
-        texturesOffline: '(Icônes hors-ligne)',
+        texturesLoading: '(Chargement PrismarineJS...)',
+        texturesLoaded: (n) => `(PrismarineJS : ${n} textures)`,
+        texturesOffline: '(PrismarineJS hors-ligne)',
         saved: '✓ Sauvegardé',
         dropTitle: "Importer des captures d'écran",
         dropHint: '1 ou plusieurs images · Glisser-déposer ou Ctrl+V',
         textModeBtn: 'Texte',
         browseBtn: 'Images',
-        manualTitle: 'Ajouter un bloc / item manuellement',
-        placeholderName: 'Nom (ex: Barrel, Campfire...)',
-        placeholderHave: 'Stock',
+        manualTitle: 'Ajouter un bloc / item (calculs autorisés : 3+2, 64*4)',
+        placeholderName: 'Nom (ex: Stone, Barrel, Campfire...)',
+        placeholderHave: 'Stock (3+2)',
         placeholderNeed: 'Requis',
         searchPlaceholder: 'Filtrer la liste...',
         ocrInit: 'Nettoyage et découpage des lignes...',
@@ -285,7 +368,9 @@
         closeReview: 'Fermer',
         addRow: '+ Ligne',
         confirmOcr: 'Ajouter tout au projet',
-        materialsHeader: 'Matériaux requis',
+        viewList: 'Liste',
+        viewChest: 'Coffres',
+        viewBuild: 'Construction',
         filterAll: 'Tous',
         filterTodo: 'À faire',
         filterDone: 'Validés',
@@ -293,7 +378,30 @@
         validatedBadge: '✓ VALIDÉ',
         missingLabel: (txt) => `Reste : ${txt}`,
         fillBtn: 'Compléter',
-        pickerPlaceholder: 'Rechercher une icône (ex: barrel, campfire, spruce...)'
+        pickerPlaceholder: 'Rechercher une icône PrismarineJS (ex: stone, barrel, spruce...)',
+        chestDouble: 'Double Coffre (54)',
+        chestSingle: 'Coffre Simple (27)',
+        chestSrcNeed: 'Quantité : Total requis',
+        chestSrcHave: 'Quantité : En stock',
+        chestSrcMissing: 'Quantité : Restant à farmer',
+        chestSummary: (chests, isDouble, slots, totalSlots, itemsCount) =>
+          `${chests} ${isDouble ? (chests > 1 ? 'Doubles Coffres' : 'Double Coffre') : (chests > 1 ? 'Coffres Simples' : 'Coffre Simple')} nécessaires · ${slots} / ${totalSlots} emplacements (${itemsCount} items)`,
+        chestTitle: (idx, isDouble) => `${isDouble ? 'Double Coffre' : 'Coffre'} #${idx}`,
+        emptyChests: 'Aucun matériau à ranger dans les coffres pour cette sélection.',
+        onionSkinLabel: 'Aperçu couche Y-1',
+        gridSizeOpt: (n) => `Grille ${n}×${n}`,
+        buildPaletteTitle: 'Blocs en stock disponibles',
+        buildEraser: 'Gomme (Clic droit)',
+        buildAddLayer: '+ Couche',
+        buildDupLayer: 'Dupliquer couche',
+        buildClearLayer: 'Vider couche',
+        buildDelLayer: 'Suppr. couche',
+        buildLayerLabel: (idx) => `Couche ${idx}`,
+        buildLayerStats: (layerBlocks, totalBlocks, layersCount) =>
+          `Couche actuelle : ${layerBlocks} blocs · Plan total : ${totalBlocks} blocs sur ${layersCount} couche${layersCount > 1 ? 's' : ''}`,
+        buildNoStock: 'Aucun bloc en stock ! Ajoute du stock (colonne de gauche) dans l’onglet Liste pour pouvoir construire couche par couche.',
+        buildHint: 'Clic ou glisser pour poser · Clic droit pour effacer',
+        confirmClearLayer: 'Vider tous les blocs de cette couche ?'
       },
       en: {
         newProject: '+ Project',
@@ -302,17 +410,17 @@
         alertLastProject: 'You must keep at least one project.',
         confirmDelete: (name) => `Delete project "${name}"?`,
         stats: (done, total, pct) => `${done} / ${total} validated · ${pct}%`,
-        texturesLoading: '(Loading Webisso API...)',
-        texturesLoaded: (n, src) => `(${src}: ${n} icons)`,
-        texturesOffline: '(Icons offline)',
+        texturesLoading: '(Loading PrismarineJS...)',
+        texturesLoaded: (n) => `(PrismarineJS: ${n} textures)`,
+        texturesOffline: '(PrismarineJS offline)',
         saved: '✓ Saved',
         dropTitle: 'Upload screenshots',
         dropHint: '1 or multiple images · Drag & drop or Ctrl+V',
         textModeBtn: 'Text',
         browseBtn: 'Images',
-        manualTitle: 'Add block / item manually',
-        placeholderName: 'Name (e.g. Barrel, Campfire...)',
-        placeholderHave: 'Have',
+        manualTitle: 'Add block / item (math supported: 3+2, 64*4)',
+        placeholderName: 'Name (e.g. Stone, Barrel, Campfire...)',
+        placeholderHave: 'Have (3+2)',
         placeholderNeed: 'Need',
         searchPlaceholder: 'Filter list...',
         ocrInit: 'Cleaning & slicing rows...',
@@ -326,7 +434,9 @@
         closeReview: 'Close',
         addRow: '+ Row',
         confirmOcr: 'Add all to project',
-        materialsHeader: 'Required Materials',
+        viewList: 'List',
+        viewChest: 'Chests',
+        viewBuild: 'Build Plan',
         filterAll: 'All',
         filterTodo: 'Remaining',
         filterDone: 'Validated',
@@ -334,11 +444,34 @@
         validatedBadge: '✓ VALIDATED',
         missingLabel: (txt) => `Left: ${txt}`,
         fillBtn: 'Fill',
-        pickerPlaceholder: 'Search icon (e.g. barrel, campfire, spruce...)'
+        pickerPlaceholder: 'Search PrismarineJS icon (e.g. stone, barrel, spruce...)',
+        chestDouble: 'Double Chest (54)',
+        chestSingle: 'Single Chest (27)',
+        chestSrcNeed: 'Quantity: Total required',
+        chestSrcHave: 'Quantity: Currently in stock',
+        chestSrcMissing: 'Quantity: Remaining to farm',
+        chestSummary: (chests, isDouble, slots, totalSlots, itemsCount) =>
+          `${chests} ${isDouble ? (chests > 1 ? 'Double Chests' : 'Double Chest') : (chests > 1 ? 'Single Chests' : 'Single Chest')} needed · ${slots} / ${totalSlots} slots (${itemsCount} items)`,
+        chestTitle: (idx, isDouble) => `${isDouble ? 'Double Chest' : 'Chest'} #${idx}`,
+        emptyChests: 'No materials to store in chests for this selection.',
+        onionSkinLabel: 'Show Y-1 layer below',
+        gridSizeOpt: (n) => `Grid ${n}×${n}`,
+        buildPaletteTitle: 'Available blocks in stock',
+        buildEraser: 'Eraser (Right-click)',
+        buildAddLayer: '+ Layer',
+        buildDupLayer: 'Duplicate layer',
+        buildClearLayer: 'Clear layer',
+        buildDelLayer: 'Delete layer',
+        buildLayerLabel: (idx) => `Layer ${idx}`,
+        buildLayerStats: (layerBlocks, totalBlocks, layersCount) =>
+          `Current layer: ${layerBlocks} blocks · Total blueprint: ${totalBlocks} blocks across ${layersCount} layer${layersCount > 1 ? 's' : ''}`,
+        buildNoStock: 'No blocks in stock! Add stock in the List tab first to build layer by layer.',
+        buildHint: 'Click or drag to place · Right-click to erase',
+        confirmClearLayer: 'Clear all blocks on this layer?'
       }
     };
 
-    const FR_ALIASES = {
+    const FR_AND_SHORT_ALIASES = {
       'bois': 'oak_log',
       'buche': 'oak_log',
       'buche de chene': 'oak_log',
@@ -348,6 +481,7 @@
       'planches de sapin': 'spruce_planks',
       'sapin': 'spruce_planks',
       'buche de sapin': 'spruce_log',
+      'stripped spruce': 'stripped_spruce_wood',
       'bois de sapin ecorce': 'stripped_spruce_wood',
       'planches de bouleau': 'birch_planks',
       'bouleau': 'birch_planks',
@@ -379,7 +513,7 @@
       'lingot d or': 'gold_ingot',
       'diamant': 'diamond',
       'cuivre': 'copper_ingot',
-      'quartz': 'block_of_quartz',
+      'quartz': 'quartz_block',
       'beton blanc': 'white_concrete',
       'beton gris': 'gray_concrete',
       'beton noir': 'black_concrete',
@@ -396,7 +530,7 @@
       'entonnoir': 'hopper',
       'piston': 'piston',
       'observateur': 'observer',
-      'redstone': 'redstone_dust',
+      'redstone': 'redstone',
       'sable': 'sand',
       'gres': 'sandstone',
       'gravier': 'gravel',
@@ -426,8 +560,15 @@
     let activeIconPickerId = null;
     let parsedOcrItems = [];
     let currentFilter = 'all';
+    let currentViewMode = 'list'; // 'list' | 'chest' | 'build'
+    let chestSlotCapacity = 54;   // 54 | 27
+    let chestQuantitySource = 'need'; // 'need' | 'have' | 'missing'
     let catalogState = 'loading';
-    let catalogSourceLabel = 'Webisso';
+
+    // État interaction Construction
+    let selectedBuildItemId = null; // id de l'item dans proj.items, ou '__eraser__'
+    let isPaintingGrid = false;
+    let paintActionMode = 'place'; // 'place' | 'erase'
 
     let state = loadState();
 
@@ -446,6 +587,21 @@
       render();
     }
 
+    function setViewMode(mode) {
+      currentViewMode = mode;
+      render();
+    }
+
+    function setChestSlots(slots) {
+      chestSlotCapacity = slots;
+      render();
+    }
+
+    function setChestSource(src) {
+      chestQuantitySource = src;
+      render();
+    }
+
     function normalizeStr(str) {
       return String(str || '')
         .toLowerCase()
@@ -456,6 +612,116 @@
         .trim();
     }
 
+    // =========================================================================
+    // ÉVALUATEUR DE CALCULS SÉCURISÉ (EX: "3+2" -> 5, "64*3+12" -> 204)
+    // =========================================================================
+    function evaluateMathExpr(rawInput, fallback = 0) {
+      const str = String(rawInput ?? '')
+        .replace(/,/g, '.')
+        .replace(/[xX×]/g, '*')
+        .replace(/÷/g, '/')
+        .replace(/\s+/g, '');
+
+      if (!str) return fallback;
+      if (/^\d+$/.test(str)) return parseInt(str, 10);
+      if (!/^[0-9+\-*/().]+$/.test(str)) return fallback;
+
+      let pos = 0;
+
+      function parseExpression() {
+        let val = parseTerm();
+        while (pos < str.length && (str[pos] === '+' || str[pos] === '-')) {
+          const op = str[pos++];
+          const right = parseTerm();
+          val = op === '+' ? val + right : val - right;
+        }
+        return val;
+      }
+
+      function parseTerm() {
+        let val = parseFactor();
+        while (pos < str.length && (str[pos] === '*' || str[pos] === '/')) {
+          const op = str[pos++];
+          const right = parseFactor();
+          if (op === '*') val *= right;
+          else val = right !== 0 ? val / right : val;
+        }
+        return val;
+      }
+
+      function parseFactor() {
+        if (str[pos] === '+') {
+          pos++;
+          return parseFactor();
+        }
+        if (str[pos] === '-') {
+          pos++;
+          return -parseFactor();
+        }
+        if (str[pos] === '(') {
+          pos++;
+          const val = parseExpression();
+          if (str[pos] === ')') pos++;
+          return val;
+        }
+        const start = pos;
+        while (pos < str.length && /[0-9.]/.test(str[pos])) pos++;
+        if (start === pos) return NaN;
+        return parseFloat(str.slice(start, pos));
+      }
+
+      const result = parseExpression();
+      if (pos !== str.length || !Number.isFinite(result)) return fallback;
+      return Math.max(0, Math.round(result));
+    }
+
+    function previewMathInput(inputEl, allowZero) {
+      const minVal = allowZero ? 0 : 1;
+      const evaluated = evaluateMathExpr(inputEl.value, allowZero ? 0 : 1);
+      if (inputEl.value.trim() !== '') {
+        inputEl.value = Math.max(minVal, evaluated);
+      }
+    }
+
+    // =========================================================================
+    // TAILLE DES STACKS MINECRAFT (64, 16 ou 1)
+    // =========================================================================
+    function getMinecraftStackSize(itemName) {
+      const resolved = resolveMinecraftItem(itemName);
+      const id = resolved ? resolved.id : normalizeStr(itemName).replace(/\s+/g, '_');
+
+      const unstackableSuffixes = [
+        '_sword', '_pickaxe', '_axe', '_shovel', '_hoe',
+        '_helmet', '_chestplate', '_leggings', '_boots',
+        '_bed', '_boat', '_chest_boat', '_raft', '_chest_raft',
+        '_horse_armor', '_bucket'
+      ];
+      const unstackableExact = new Set([
+        'bow', 'crossbow', 'trident', 'shield', 'fishing_rod',
+        'flint_and_steel', 'shears', 'brush', 'spyglass', 'mace',
+        'minecart', 'chest_minecart', 'furnace_minecart', 'tnt_minecart', 'hopper_minecart',
+        'saddle', 'totem_of_undying', 'elytra', 'enchanted_book',
+        'potion', 'splash_potion', 'lingering_potion',
+        'cake', 'goat_horn', 'bundle', 'wolf_armor', 'carrot_on_a_stick', 'warped_fungus_on_a_stick'
+      ]);
+
+      if (id !== 'bucket' && unstackableSuffixes.some(suf => id.endsWith(suf))) return 1;
+      if (unstackableExact.has(id) || id.startsWith('music_disc_') || id.endsWith('shulker_box')) return 1;
+
+      const stack16Exact = new Set([
+        'ender_pearl', 'snowball', 'egg', 'blue_egg', 'brown_egg',
+        'bucket', 'honey_bottle', 'armor_stand', 'written_book', 'writable_book', 'wind_charge'
+      ]);
+      if (stack16Exact.has(id) || id.endsWith('_sign') || id.endsWith('_hanging_sign') || id.endsWith('_banner')) {
+        return 16;
+      }
+
+      return 64;
+    }
+
+    // =========================================================================
+    // CHARGEMENT UNIQUE : PRISMARINEJS MINECRAFT-ASSETS (1.21.4)
+    // =========================================================================
     function minecraftEditDistance(a, b) {
       if (a === b) return 0;
       if (!a.length) return b.length;
@@ -495,175 +761,19 @@
       return matrix[cb.length][ca.length];
     }
 
-    function extractEntriesFromPayload(raw) {
-      if (!raw) return [];
-      if (Array.isArray(raw)) return raw;
-      if (Array.isArray(raw.data)) return raw.data;
-      if (Array.isArray(raw.icons)) return raw.icons;
-      if (Array.isArray(raw.items)) return raw.items;
-
-      const collected = [];
-      for (const val of Object.values(raw)) {
-        if (Array.isArray(val)) collected.push(...val);
-        else if (val && typeof val === 'object') {
-          for (const subVal of Object.values(val)) {
-            if (Array.isArray(subVal)) collected.push(...subVal);
-          }
-        }
-      }
-      return collected;
-    }
-
-    // Gère proprement tous les formats de chemins Webisso (/minecraft-item-icons/..., /thumbnails/..., thumbnails/...)
-    function resolveWebissoUrl(pathOrUrl) {
-      if (!pathOrUrl) return '';
-      const str = String(pathOrUrl).trim();
-      if (/^https?:\/\//i.test(str)) return str;
-      if (str.startsWith('/minecraft-item-icons/')) {
-        return `${WEBISSO_ORIGIN}${str}`;
-      }
-      const cleanPath = str.replace(/^\/+/, '');
-      return `${WEBISSO_BASE}/${cleanPath}`;
-    }
-
-    // --- Chargement API Webisso v1 (/api/v1/icons.json) ---
-    async function loadMinecraftTextures() {
-      catalogState = 'loading';
-      render();
-
-      const catalogMap = new Map();
-      let webissoCount = 0;
-
-      // Essaie d'abord l'endpoint officiel REST v1 statique, puis api.json en repli
-      const endpoints = [
-        `${WEBISSO_BASE}/api/v1/icons.json`,
-        `${WEBISSO_BASE}/api.json`
-      ];
-
-      for (const endpoint of endpoints) {
-        if (webissoCount > 0) break;
-        try {
-          const res = await fetch(endpoint, { cache: 'no-cache' });
-          if (!res.ok) continue;
-          const raw = await res.json();
-          const entries = extractEntriesFromPayload(raw);
-
-          // Priorité aux Blocs (20-blocks) et Items (10-items) avant particules/UI
-          const categoryPriority = (catSlug = '') => {
-            const c = String(catSlug).toLowerCase();
-            if (c.includes('block')) return 0;
-            if (c.includes('item')) return 1;
-            if (c.includes('weapon')) return 2;
-            if (c.includes('particle') || c.includes('interface') || c.includes('gui')) return 9;
-            return 5;
-          };
-
-          entries.sort((a, b) =>
-            categoryPriority(a?.category_slug || a?.category) - categoryPriority(b?.category_slug || b?.category)
-          );
-
-          for (const entry of entries) {
-            if (!entry || typeof entry !== 'object') continue;
-
-            const rawLabel = entry.name || entry.label || entry.title || entry.file || entry.file_slug || '';
-            const baseName = String(rawLabel)
-              .replace(/\.(png|webp|gif|jpg|jpeg)$/i, '')
-              .replace(/[_-]+/g, ' ')
-              .trim();
-
-            const norm = normalizeStr(baseName);
-            const cleanId = norm.replace(/\s+/g, '_');
-            if (!cleanId) continue;
-
-            let iconUrl = resolveWebissoUrl(entry.thumbnail || entry.thumb || entry.thumbnail_url || '');
-            let fallbackUrl = resolveWebissoUrl(entry.asset || entry.url || entry.asset_url || '');
-
-            if ((!iconUrl || !fallbackUrl) && entry.category_slug && (entry.file_slug || entry.file)) {
-              const rawSlug = String(entry.file_slug || entry.file).replace(/^\/+/, '');
-              const fileWithExt = /\.(png|webp|gif|jpg|jpeg)$/i.test(rawSlug) ? rawSlug : `${rawSlug}.png`;
-              const subClean = entry.subcategory_slug
-                ? `${String(entry.subcategory_slug).replace(/^\/+|\/+$/g, '')}/`
-                : '';
-              const catClean = String(entry.category_slug).replace(/^\/+|\/+$/g, '');
-
-              if (!iconUrl) {
-                iconUrl = `${WEBISSO_BASE}/thumbnails/${catClean}/${subClean}${fileWithExt}`;
-              }
-              if (!fallbackUrl) {
-                fallbackUrl = `${WEBISSO_BASE}/assets/${catClean}/${subClean}${fileWithExt}`;
-              }
-            }
-
-            if (!iconUrl && fallbackUrl) iconUrl = fallbackUrl;
-            if (!iconUrl) continue;
-
-            // Conserve la première occurrence (la plus prioritaire : 20-blocks ou 10-items)
-            if (!catalogMap.has(cleanId)) {
-              const prettyName = baseName.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-              catalogMap.set(cleanId, {
-                id: cleanId,
-                readable: prettyName,
-                normReadable: norm,
-                category: entry.category_slug || '',
-                iconUrl,
-                fallbackUrl,
-                backupUrl: ''
-              });
-              webissoCount++;
-            }
-          }
-        } catch (err) {
-          console.warn('Webisso endpoint warning:', endpoint, err);
-        }
-      }
-
-      // Catalogue de secours CDN uniquement si une icône précise est absente
-      try {
-        const res3d = await fetch('https://cdn.jsdelivr.net/npm/minecraft-icon-items@0.4.5/data/itemsByName.json');
-        if (res3d.ok) {
-          const data3d = await res3d.json();
-          for (const item of Object.values(data3d)) {
-            if (!item?.name || !item?.icon) continue;
-            const norm = normalizeStr(item.name);
-            const cleanId = norm.replace(/\s+/g, '_');
-            const dataUri = `data:image/png;base64,${item.icon}`;
-
-            if (catalogMap.has(cleanId)) {
-              catalogMap.get(cleanId).backupUrl = dataUri;
-            } else {
-              catalogMap.set(cleanId, {
-                id: cleanId,
-                readable: item.name,
-                normReadable: norm,
-                category: 'cdn',
-                iconUrl: dataUri,
-                fallbackUrl: '',
-                backupUrl: ''
-              });
-            }
-          }
-        }
-      } catch {}
-
-      mcCatalog = Array.from(catalogMap.values());
-      mcCatalogById = {};
-      for (const item of mcCatalog) {
-        mcCatalogById[item.id] = item;
-      }
-
-      catalogSourceLabel = webissoCount > 0 ? 'Webisso' : 'CDN';
-      catalogState = mcCatalog.length > 0 ? 'loaded' : 'offline';
-
-      // Actualise automatiquement les icônes de tous les projets enregistrés
+    function refreshAllProjectIcons(forceOverwrite = false) {
+      if (!mcCatalog.length) return;
       let updated = false;
       for (const proj of state.projects) {
         for (const item of proj.items) {
-          const match = resolveMinecraftItem(item.name);
-          if (match) {
-            item.iconUrl = match.iconUrl;
-            item.fallbackUrl = match.fallbackUrl;
-            item.backupUrl = match.backupUrl;
-            updated = true;
+          const isOldWebisso = item.iconUrl && item.iconUrl.includes('webisso.github.io');
+          if (forceOverwrite || isOldWebisso || !item.iconUrl) {
+            const match = resolveMinecraftItem(item.name);
+            if (match) {
+              item.iconUrl = match.iconUrl;
+              item.fallbackUrl = match.fallbackUrl || '';
+              updated = true;
+            }
           }
         }
       }
@@ -671,24 +781,96 @@
       else render();
     }
 
+    async function loadMinecraftTextures() {
+      catalogState = 'loading';
+      render();
+
+      const catalogMap = new Map();
+
+      try {
+        const [itemsRes, blocksRes] = await Promise.all([
+          fetch(`${PRISMARINE_CDN}/items_textures.json`),
+          fetch(`${PRISMARINE_CDN}/blocks_textures.json`)
+        ]);
+
+        const registerEntries = (payload, defaultFolder) => {
+          if (!payload) return;
+          // PrismarineJS minecraft-assets utilise un tableau [{ name, texture }]
+          const list = Array.isArray(payload)
+            ? payload
+            : Object.entries(payload).map(([name, val]) =>
+                typeof val === 'string' ? { name, texture: val } : { name, ...val }
+              );
+
+          for (const entry of list) {
+            if (!entry || !entry.name || !entry.texture) continue;
+            const cleanId = String(entry.name).replace(/^minecraft:/, '').trim();
+            if (!cleanId) continue;
+
+            // entry.texture est par ex. "blocks/stone" ou "items/water_bucket"
+            const texPath = String(entry.texture)
+              .replace(/^minecraft:/, '')
+              .replace(/^block\//, 'blocks/')
+              .replace(/^item\//, 'items/');
+
+            const iconUrl = `${PRISMARINE_CDN}/${texPath}.png`;
+            const fallbackUrl = `${PRISMARINE_CDN}/${defaultFolder}/${cleanId}.png`;
+            const readable = cleanId.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+            catalogMap.set(cleanId, {
+              id: cleanId,
+              readable,
+              normReadable: normalizeStr(readable),
+              category: defaultFolder,
+              iconUrl,
+              fallbackUrl: fallbackUrl !== iconUrl ? fallbackUrl : ''
+            });
+          }
+        };
+
+        if (itemsRes.ok) registerEntries(await itemsRes.json(), 'items');
+        if (blocksRes.ok) registerEntries(await blocksRes.json(), 'blocks');
+      } catch (err) {
+        console.error('PrismarineJS load error:', err);
+      }
+
+      mcCatalog = Array.from(catalogMap.values());
+      mcCatalogById = {};
+      for (const item of mcCatalog) {
+        mcCatalogById[item.id] = item;
+      }
+
+      catalogState = mcCatalog.length > 0 ? 'loaded' : 'offline';
+      refreshAllProjectIcons(true);
+    }
+
     function resolveMinecraftItem(rawName) {
       if (!mcCatalog.length || !rawName) return null;
       const norm = normalizeStr(rawName);
       if (!norm) return null;
 
-      // 1. Alias FR exact
-      if (FR_ALIASES[norm] && mcCatalogById[FR_ALIASES[norm]]) {
-        return mcCatalogById[FR_ALIASES[norm]];
+      // 1. Alias FR ou abrégés exacts (ex: "stripped spruce" -> "stripped_spruce_wood")
+      if (FR_AND_SHORT_ALIASES[norm] && mcCatalogById[FR_AND_SHORT_ALIASES[norm]]) {
+        return mcCatalogById[FR_AND_SHORT_ALIASES[norm]];
       }
 
-      // 2. Correspondance exacte ID ou nom lisible
+      // 2. Correspondance exacte ID ou nom lisible (ex: "stone" -> "stone", "stone_bricks" -> "stone_bricks")
       const asId = norm.replace(/\s+/g, '_');
       if (mcCatalogById[asId]) return mcCatalogById[asId];
 
       const exactReadable = mcCatalog.find(i => i.normReadable === norm);
       if (exactReadable) return exactReadable;
 
-      // 3. Correction fautes de frappe OCR (même nombre de mots)
+      // 3. Préfixe exact (ex: "polished andesi" -> "polished_andesite", "stripped spruce" -> "stripped_spruce_log")
+      if (norm.length >= 6) {
+        const prefixMatches = mcCatalog.filter(i => i.normReadable.startsWith(norm + ' ') || i.normReadable.startsWith(norm));
+        if (prefixMatches.length > 0) {
+          prefixMatches.sort((a, b) => a.normReadable.length - b.normReadable.length);
+          return prefixMatches[0];
+        }
+      }
+
+      // 4. Correction fautes de frappe OCR (même nombre de mots uniquement, évite les faux positifs)
       const inputWords = norm.split(' ');
       if (norm.length >= 4) {
         let bestMatch = null;
@@ -709,33 +891,6 @@
         if (bestMatch) return bestMatch;
       }
 
-      // 4. Recherche de variantes multi-mots (ex: "barrel" -> "Barrel Closed", "campfire" -> "Lit Campfire")
-      const secondaryWords = new Set(['open', 'unlit', 'off', 'top', 'bottom', 'side', 'front', 'back', 'empty', 'broken', 'inside', 'particle']);
-      const variantCandidates = mcCatalog.filter(item => {
-        const wList = item.normReadable.split(' ');
-        return inputWords.every(w => wList.includes(w));
-      });
-
-      if (variantCandidates.length > 0) {
-        variantCandidates.sort((a, b) => {
-          const aWords = a.normReadable.split(' ');
-          const bWords = b.normReadable.split(' ');
-          const aPenalty = aWords.some(w => secondaryWords.has(w)) ? 100 : 0;
-          const bPenalty = bWords.some(w => secondaryWords.has(w)) ? 100 : 0;
-          return (aPenalty + a.normReadable.length) - (bPenalty + b.normReadable.length);
-        });
-        const bestVariant = variantCandidates[0];
-        const titleCased = norm.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
-        return {
-          id: bestVariant.id,
-          readable: titleCased,
-          normReadable: norm,
-          iconUrl: bestVariant.iconUrl,
-          fallbackUrl: bestVariant.fallbackUrl,
-          backupUrl: bestVariant.backupUrl
-        };
-      }
-
       return null;
     }
 
@@ -746,8 +901,8 @@
       const results = [];
       const seen = new Set();
 
-      for (const [frKey, mcId] of Object.entries(FR_ALIASES)) {
-        if (frKey.includes(norm) && mcCatalogById[mcId] && !seen.has(mcId)) {
+      for (const [aliasKey, mcId] of Object.entries(FR_AND_SHORT_ALIASES)) {
+        if (aliasKey.includes(norm) && mcCatalogById[mcId] && !seen.has(mcId)) {
           seen.add(mcId);
           results.push(mcCatalogById[mcId]);
           if (results.length >= limit) return results;
@@ -767,18 +922,10 @@
     }
 
     function handleIconError(imgEl) {
-      const step = parseInt(imgEl.dataset.step || '0', 10);
       const fb1 = imgEl.dataset.fb1;
-      const fb2 = imgEl.dataset.fb2;
-
-      if (step === 0 && fb1 && imgEl.src !== fb1) {
+      if (imgEl.dataset.step === '0' && fb1 && imgEl.src !== fb1) {
         imgEl.dataset.step = '1';
         imgEl.src = fb1;
-        return;
-      }
-      if (step <= 1 && fb2 && imgEl.src !== fb2) {
-        imgEl.dataset.step = '2';
-        imgEl.src = fb2;
         return;
       }
       const span = document.createElement('span');
@@ -787,24 +934,24 @@
       imgEl.replaceWith(span);
     }
 
-    function renderIconImg(iconUrl, fallbackUrl = '', backupUrl = '', sizeClass = 'w-8 h-8') {
-      if (!iconUrl && !fallbackUrl && !backupUrl) {
+    function renderIconImg(iconUrl, fallbackUrl = '', sizeClass = 'w-8 h-8', extraClass = '') {
+      if (!iconUrl && !fallbackUrl) {
         return `<span class="text-xs text-neutral-600">?</span>`;
       }
-      const primary = iconUrl || fallbackUrl || backupUrl;
+      const primary = iconUrl || fallbackUrl;
       return `<img src="${escapeHtml(primary)}"
         data-step="0"
         data-fb1="${escapeHtml(fallbackUrl || '')}"
-        data-fb2="${escapeHtml(backupUrl || '')}"
         alt=""
         loading="lazy"
-        class="${sizeClass} mc-pixel object-contain"
+        draggable="false"
+        class="${sizeClass} ${extraClass} mc-pixel object-contain pointer-events-none"
         onerror="handleIconError(this)" />`;
     }
 
-    // --- État & Sauvegarde (avec migration automatique des versions précédentes) ---
+    // --- État & Sauvegarde ---
     function loadState() {
-      const keysToTry = [STORAGE_KEY, 'mc_base_tracker_v8', 'mc_base_tracker_v7', 'mc_base_tracker_v6'];
+      const keysToTry = [STORAGE_KEY, 'mc_base_tracker_v11', 'mc_base_tracker_v10', 'mc_base_tracker_v9'];
       for (const key of keysToTry) {
         const saved = localStorage.getItem(key);
         if (saved) {
@@ -838,7 +985,16 @@
     }
 
     function getActiveProject() {
-      return state.projects.find(p => p.id === state.activeProjectId) || state.projects[0];
+      const proj = state.projects.find(p => p.id === state.activeProjectId) || state.projects[0];
+      if (!proj.blueprint) {
+        proj.blueprint = {
+          size: 16,
+          activeLayerIndex: 0,
+          showOnionSkin: true,
+          layers: [{ cells: {} }]
+        };
+      }
+      return proj;
     }
 
     function escapeHtml(str) {
@@ -852,7 +1008,12 @@
       const name = prompt(t().promptProject);
       if (!name || !name.trim()) return;
       const id = 'proj_' + Date.now();
-      state.projects.push({ id, name: name.trim(), items: [] });
+      state.projects.push({
+        id,
+        name: name.trim(),
+        items: [],
+        blueprint: { size: 16, activeLayerIndex: 0, showOnionSkin: true, layers: [{ cells: {} }] }
+      });
       state.activeProjectId = id;
       saveState();
     }
@@ -871,6 +1032,7 @@
 
     document.getElementById('projectSelect').addEventListener('change', (e) => {
       state.activeProjectId = e.target.value;
+      selectedBuildItemId = null;
       saveState();
     });
 
@@ -882,7 +1044,7 @@
       const directMatch = resolveMinecraftItem(val);
       selectedManualMatch = directMatch || null;
       previewBox.innerHTML = directMatch
-        ? renderIconImg(directMatch.iconUrl, directMatch.fallbackUrl, directMatch.backupUrl, 'w-6 h-6')
+        ? renderIconImg(directMatch.iconUrl, directMatch.fallbackUrl, 'w-6 h-6')
         : `<span class="text-xs text-neutral-600">?</span>`;
 
       const suggestions = searchMinecraftCatalog(val, 15);
@@ -896,10 +1058,10 @@
         <button type="button" onclick="selectAutocompleteItemById('${escapeHtml(s.id)}')"
           class="w-full flex items-center justify-between px-3 py-2 text-left text-xs hover:bg-[#2a2a2a] transition cursor-pointer">
           <div class="flex items-center gap-3">
-            ${renderIconImg(s.iconUrl, s.fallbackUrl, s.backupUrl, 'w-6 h-6')}
+            ${renderIconImg(s.iconUrl, s.fallbackUrl, 'w-6 h-6')}
             <span class="text-white">${escapeHtml(s.readable)}</span>
           </div>
-          <span class="text-neutral-500">${escapeHtml(s.category || s.id)}</span>
+          <span class="text-neutral-500">${escapeHtml(s.id)}</span>
         </button>
       `).join('');
     }
@@ -909,7 +1071,7 @@
       if (!entry) return;
       document.getElementById('manualName').value = entry.readable;
       selectedManualMatch = entry;
-      document.getElementById('manualPreviewBox').innerHTML = renderIconImg(entry.iconUrl, entry.fallbackUrl, entry.backupUrl, 'w-6 h-6');
+      document.getElementById('manualPreviewBox').innerHTML = renderIconImg(entry.iconUrl, entry.fallbackUrl, 'w-6 h-6');
       document.getElementById('autocompleteDropdown').classList.add('hidden');
     }
 
@@ -923,12 +1085,12 @@
     function addManualItem(e) {
       e.preventDefault();
       const name = document.getElementById('manualName').value.trim();
-      const have = parseInt(document.getElementById('manualHave').value, 10) || 0;
-      const need = parseInt(document.getElementById('manualNeed').value, 10) || 1;
+      const have = evaluateMathExpr(document.getElementById('manualHave').value, 0);
+      const need = Math.max(1, evaluateMathExpr(document.getElementById('manualNeed').value, 1));
       if (!name) return;
 
       const resolved = selectedManualMatch || resolveMinecraftItem(name);
-      upsertMaterial(name, have, need, resolved?.iconUrl || '', resolved?.fallbackUrl || '', resolved?.backupUrl || '');
+      upsertMaterial(name, have, need, resolved?.iconUrl || '', resolved?.fallbackUrl || '');
 
       e.target.reset();
       selectedManualMatch = null;
@@ -937,7 +1099,7 @@
       saveState();
     }
 
-    function upsertMaterial(name, have, need, iconUrl = '', fallbackUrl = '', backupUrl = '') {
+    function upsertMaterial(name, have, need, iconUrl = '', fallbackUrl = '') {
       const proj = getActiveProject();
       const existing = proj.items.find(i => normalizeStr(i.name) === normalizeStr(name));
       if (existing) {
@@ -946,18 +1108,16 @@
         if (!existing.iconUrl && iconUrl) {
           existing.iconUrl = iconUrl;
           existing.fallbackUrl = fallbackUrl;
-          existing.backupUrl = backupUrl;
         }
       } else {
-        const autoMatch = iconUrl ? { iconUrl, fallbackUrl, backupUrl } : resolveMinecraftItem(name);
+        const autoMatch = iconUrl ? { iconUrl, fallbackUrl } : resolveMinecraftItem(name);
         proj.items.push({
-          id: 'item_' + Date.now() + Math.random(),
+          id: 'item_' + Date.now() + Math.random().toString(36).slice(2, 6),
           name: autoMatch?.readable || name,
           have,
           need,
           iconUrl: autoMatch?.iconUrl || '',
-          fallbackUrl: autoMatch?.fallbackUrl || '',
-          backupUrl: autoMatch?.backupUrl || ''
+          fallbackUrl: autoMatch?.fallbackUrl || ''
         });
       }
     }
@@ -970,21 +1130,30 @@
       saveState();
     }
 
-    function setItemHave(id, value) {
+    function commitItemHaveExpr(id, rawValue) {
       const proj = getActiveProject();
       const item = proj.items.find(i => i.id === id);
       if (!item) return;
-      item.have = Math.max(0, parseInt(value, 10) || 0);
+      const evaluated = evaluateMathExpr(rawValue, item.have);
+      item.have = Math.max(0, evaluated);
       saveState();
+    }
+
+    function handleHaveKeyDown(e, id) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitItemHaveExpr(id, e.target.value);
+      }
     }
 
     function editItemNeed(id) {
       const proj = getActiveProject();
       const item = proj.items.find(i => i.id === id);
       if (!item) return;
-      const val = prompt(`${item.name} — Requis :`, item.need);
-      const parsed = parseInt(val, 10);
-      if (!isNaN(parsed) && parsed > 0) {
+      const val = prompt(`${item.name} — Requis (ex: 64*4) :`, item.need);
+      if (val === null) return;
+      const parsed = evaluateMathExpr(val, 0);
+      if (parsed > 0) {
         item.need = parsed;
         saveState();
       }
@@ -1001,6 +1170,14 @@
     function removeItem(id) {
       const proj = getActiveProject();
       proj.items = proj.items.filter(i => i.id !== id);
+      // Nettoyer aussi du plan de construction si supprimé
+      if (proj.blueprint?.layers) {
+        for (const layer of proj.blueprint.layers) {
+          for (const [coord, itemId] of Object.entries(layer.cells)) {
+            if (itemId === id) delete layer.cells[coord];
+          }
+        }
+      }
       saveState();
     }
 
@@ -1020,9 +1197,9 @@
       const results = searchMinecraftCatalog(query, 30);
       container.innerHTML = results.map(r => `
         <button type="button" onclick="applyIconToItemById('${itemId}', '${escapeHtml(r.id)}')"
-          title="${escapeHtml(r.readable)} (${escapeHtml(r.category)})"
+          title="${escapeHtml(r.readable)}"
           class="w-9 h-9 mc-slot flex items-center justify-center cursor-pointer">
-          ${renderIconImg(r.iconUrl, r.fallbackUrl, r.backupUrl, 'w-6 h-6')}
+          ${renderIconImg(r.iconUrl, r.fallbackUrl, 'w-6 h-6')}
         </button>
       `).join('');
     }
@@ -1034,16 +1211,459 @@
       if (item && entry) {
         item.iconUrl = entry.iconUrl;
         item.fallbackUrl = entry.fallbackUrl;
-        item.backupUrl = entry.backupUrl;
       }
       activeIconPickerId = null;
       saveState();
     }
 
     // =========================================================================
-    // OCR SPÉCIALISÉ MINECRAFT : ISOLATION TEXTE + DÉCOUPE LIGNES + DOUBLE PASSE
+    // VUE CONSTRUCTION : PLAN COUCHE PAR COUCHE AVEC LE STOCK DISPONIBLE
     // =========================================================================
+    function getUsedBlueprintCounts(proj) {
+      const used = {};
+      for (const layer of proj.blueprint.layers) {
+        for (const itemId of Object.values(layer.cells)) {
+          used[itemId] = (used[itemId] || 0) + 1;
+        }
+      }
+      return used;
+    }
 
+    function selectBuildBrush(itemId) {
+      selectedBuildItemId = itemId;
+      render();
+    }
+
+    function toggleOnionSkin(checked) {
+      const proj = getActiveProject();
+      proj.blueprint.showOnionSkin = checked;
+      saveState();
+    }
+
+    function changeBlueprintSize(newSizeVal) {
+      const proj = getActiveProject();
+      const newSize = parseInt(newSizeVal, 10) || 16;
+      proj.blueprint.size = newSize;
+      // Nettoyer les cellules hors limites si réduit
+      for (const layer of proj.blueprint.layers) {
+        for (const key of Object.keys(layer.cells)) {
+          const [x, y] = key.split(',').map(Number);
+          if (x >= newSize || y >= newSize) delete layer.cells[key];
+        }
+      }
+      saveState();
+    }
+
+    function setActiveLayer(idx) {
+      const proj = getActiveProject();
+      proj.blueprint.activeLayerIndex = Math.max(0, Math.min(proj.blueprint.layers.length - 1, idx));
+      saveState();
+    }
+
+    function addBlueprintLayer() {
+      const proj = getActiveProject();
+      proj.blueprint.layers.push({ cells: {} });
+      proj.blueprint.activeLayerIndex = proj.blueprint.layers.length - 1;
+      saveState();
+    }
+
+    function duplicateBlueprintLayer() {
+      const proj = getActiveProject();
+      const bp = proj.blueprint;
+      const srcLayer = bp.layers[bp.activeLayerIndex];
+      const used = getUsedBlueprintCounts(proj);
+      const itemMap = Object.fromEntries(proj.items.map(i => [i.id, i]));
+
+      const newCells = {};
+      for (const [coord, itemId] of Object.entries(srcLayer.cells)) {
+        const item = itemMap[itemId];
+        if (!item) continue;
+        const alreadyUsed = used[itemId] || 0;
+        if (alreadyUsed < item.have) {
+          newCells[coord] = itemId;
+          used[itemId] = alreadyUsed + 1;
+        }
+      }
+
+      bp.layers.splice(bp.activeLayerIndex + 1, 0, { cells: newCells });
+      bp.activeLayerIndex += 1;
+      saveState();
+    }
+
+    function clearCurrentBlueprintLayer() {
+      const proj = getActiveProject();
+      const bp = proj.blueprint;
+      if (Object.keys(bp.layers[bp.activeLayerIndex].cells).length === 0) return;
+      if (!confirm(t().confirmClearLayer)) return;
+      bp.layers[bp.activeLayerIndex].cells = {};
+      saveState();
+    }
+
+    function deleteCurrentBlueprintLayer() {
+      const proj = getActiveProject();
+      const bp = proj.blueprint;
+      if (bp.layers.length <= 1) return;
+      bp.layers.splice(bp.activeLayerIndex, 1);
+      bp.activeLayerIndex = Math.max(0, bp.activeLayerIndex - 1);
+      saveState();
+    }
+
+    function applyCellPaint(x, y, forceErase = false) {
+      const proj = getActiveProject();
+      const bp = proj.blueprint;
+      const layer = bp.layers[bp.activeLayerIndex];
+      const key = `${x},${y}`;
+
+      if (forceErase || selectedBuildItemId === '__eraser__') {
+        if (layer.cells[key]) {
+          delete layer.cells[key];
+          saveState();
+        }
+        return;
+      }
+
+      if (!selectedBuildItemId) return;
+
+      // Si on clique sur une case qui a déjà exactement ce bloc (en clic simple), on l'efface
+      if (layer.cells[key] === selectedBuildItemId && !isPaintingGrid) {
+        delete layer.cells[key];
+        saveState();
+        return;
+      }
+
+      // Vérifier le stock disponible
+      const targetItem = proj.items.find(i => i.id === selectedBuildItemId);
+      if (!targetItem || targetItem.have <= 0) return;
+
+      const used = getUsedBlueprintCounts(proj);
+      const currentCellItem = layer.cells[key];
+      const effectiveUsed = (used[selectedBuildItemId] || 0) - (currentCellItem === selectedBuildItemId ? 1 : 0);
+
+      if (effectiveUsed >= targetItem.have) {
+        return; // Stock épuisé pour ce bloc
+      }
+
+      if (layer.cells[key] !== selectedBuildItemId) {
+        layer.cells[key] = selectedBuildItemId;
+        saveState();
+      }
+    }
+
+    function onGridCellMouseDown(e, x, y) {
+      e.preventDefault();
+      if (e.button === 2) {
+        isPaintingGrid = true;
+        paintActionMode = 'erase';
+        applyCellPaint(x, y, true);
+        return;
+      }
+      if (e.button === 0) {
+        const proj = getActiveProject();
+        const layer = proj.blueprint.layers[proj.blueprint.activeLayerIndex];
+        const key = `${x},${y}`;
+
+        // Alt+clic = pipette
+        if (e.altKey && layer.cells[key]) {
+          selectBuildBrush(layer.cells[key]);
+          return;
+        }
+
+        if (selectedBuildItemId === '__eraser__' || layer.cells[key] === selectedBuildItemId) {
+          paintActionMode = 'erase';
+          applyCellPaint(x, y, true);
+        } else {
+          paintActionMode = 'place';
+          applyCellPaint(x, y, false);
+        }
+        isPaintingGrid = true;
+      }
+    }
+
+    function onGridCellMouseEnter(x, y) {
+      if (!isPaintingGrid) return;
+      applyCellPaint(x, y, paintActionMode === 'erase');
+    }
+
+    window.addEventListener('mouseup', () => {
+      isPaintingGrid = false;
+    });
+
+    function renderBuildView(proj) {
+      const dict = t();
+      const container = document.getElementById('buildViewContainer');
+      const bp = proj.blueprint;
+
+      // Filtrer uniquement les matériaux ayant du stock > 0
+      const stockItems = proj.items.filter(i => i.have > 0);
+      const itemById = Object.fromEntries(proj.items.map(i => [i.id, i]));
+      const usedCounts = getUsedBlueprintCounts(proj);
+
+      // Sélectionner automatiquement le premier bloc en stock si rien n'est sélectionné
+      if (
+        selectedBuildItemId !== '__eraser__' &&
+        (!selectedBuildItemId || !stockItems.some(i => i.id === selectedBuildItemId))
+      ) {
+        selectedBuildItemId = stockItems.length > 0 ? stockItems[0].id : '__eraser__';
+      }
+
+      const activeLayer = bp.layers[bp.activeLayerIndex] || bp.layers[0];
+      const belowLayer = bp.activeLayerIndex > 0 ? bp.layers[bp.activeLayerIndex - 1] : null;
+
+      const currentLayerCount = Object.keys(activeLayer.cells).length;
+      const totalBlueprintCount = bp.layers.reduce((sum, l) => sum + Object.keys(l.cells).length, 0);
+
+      // Barre des couches
+      const layersTabsHtml = bp.layers.map((_, idx) => {
+        const isCurrent = idx === bp.activeLayerIndex;
+        const count = Object.keys(bp.layers[idx].cells).length;
+        return `
+          <button type="button" onclick="setActiveLayer(${idx})"
+            class="px-3 py-1.5 text-xs border border-[#0e0e0e] cursor-pointer flex items-center gap-1.5 ${
+              isCurrent ? 'bg-[#80ff20] text-black font-bold' : 'bg-[#181818] text-neutral-300 hover:text-white'
+            }">
+            <span class="mc-font">${dict.buildLayerLabel(idx + 1)}</span>
+            <span class="opacity-75">(${count})</span>
+          </button>
+        `;
+      }).join('');
+
+      // Palette des blocs en stock
+      let paletteHtml = '';
+      if (stockItems.length === 0) {
+        paletteHtml = `
+          <div class="p-3 bg-[#181818] border border-[#2d2d2d] text-xs text-amber-400">
+            ${dict.buildNoStock}
+          </div>
+        `;
+      } else {
+        const cards = stockItems.map(item => {
+          const used = usedCounts[item.id] || 0;
+          const remaining = Math.max(0, item.have - used);
+          const isSelected = selectedBuildItemId === item.id;
+          const isEmpty = remaining === 0;
+
+          return `
+            <button type="button" onclick="selectBuildBrush('${item.id}')"
+              class="w-full flex items-center justify-between p-2 border-2 text-left transition cursor-pointer ${
+                isSelected
+                  ? 'bg-[#21331a] border-[#80ff20]'
+                  : isEmpty
+                    ? 'bg-[#141414] border-[#1f1f1f] opacity-50'
+                    : 'bg-[#181818] border-[#0e0e0e] hover:bg-[#222222]'
+              }">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <div class="w-7 h-7 mc-slot flex items-center justify-center shrink-0">
+                  ${renderIconImg(item.iconUrl, item.fallbackUrl, 'w-5 h-5')}
+                </div>
+                <span class="text-xs text-white truncate">${escapeHtml(item.name)}</span>
+              </div>
+              <span class="text-xs font-bold shrink-0 ml-2 ${isEmpty ? 'text-red-400' : 'text-[#80ff20]'}">
+                ${remaining}/${item.have}
+              </span>
+            </button>
+          `;
+        }).join('');
+
+        paletteHtml = `
+          <div class="space-y-1.5 max-h-[460px] overflow-y-auto pr-1">
+            <button type="button" onclick="selectBuildBrush('__eraser__')"
+              class="w-full flex items-center justify-between p-2 border-2 text-left text-xs cursor-pointer ${
+                selectedBuildItemId === '__eraser__'
+                  ? 'bg-[#331a1a] border-red-400 text-white'
+                  : 'bg-[#181818] border-[#0e0e0e] text-neutral-300 hover:text-white'
+              }">
+              <span>⌫ ${dict.buildEraser}</span>
+            </button>
+            ${cards}
+          </div>
+        `;
+      }
+
+      // Grille de construction
+      const size = bp.size || 16;
+      const cellsHtml = [];
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const key = `${x},${y}`;
+          const placedItemId = activeLayer.cells[key];
+          const placedItem = placedItemId ? itemById[placedItemId] : null;
+          const belowItemId = !placedItem && bp.showOnionSkin && belowLayer ? belowLayer.cells[key] : null;
+          const belowItem = belowItemId ? itemById[belowItemId] : null;
+
+          let inner = '';
+          let title = `(${x + 1}, ${y + 1})`;
+          if (placedItem) {
+            inner = renderIconImg(placedItem.iconUrl, placedItem.fallbackUrl, 'w-full h-full');
+            title += ` — ${placedItem.name}`;
+          } else if (belowItem) {
+            inner = renderIconImg(belowItem.iconUrl, belowItem.fallbackUrl, 'w-full h-full', 'opacity-25 grayscale');
+            title += ` — [Y-1: ${belowItem.name}]`;
+          }
+
+          cellsHtml.push(`
+            <div title="${escapeHtml(title)}"
+              onmousedown="onGridCellMouseDown(event, ${x}, ${y})"
+              onmouseenter="onGridCellMouseEnter(${x}, ${y})"
+              oncontextmenu="return false;"
+              class="mc-build-cell aspect-square flex items-center justify-center cursor-crosshair">
+              ${inner}
+            </div>
+          `);
+        }
+      }
+
+      container.innerHTML = `
+        <!-- Barre d'outils des couches -->
+        <div class="bg-[#181818] border-2 border-[#0e0e0e] p-3 flex flex-wrap items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-1.5">
+            ${layersTabsHtml}
+            <button type="button" onclick="addBlueprintLayer()" class="mc-btn-green mc-font text-xs px-3 py-1.5 cursor-pointer">
+              ${dict.buildAddLayer}
+            </button>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-1.5 text-xs">
+            <button type="button" onclick="duplicateBlueprintLayer()" class="mc-btn px-2.5 py-1.5 cursor-pointer">${dict.buildDupLayer}</button>
+            <button type="button" onclick="clearCurrentBlueprintLayer()" class="mc-btn px-2.5 py-1.5 cursor-pointer">${dict.buildClearLayer}</button>
+            ${bp.layers.length > 1
+              ? `<button type="button" onclick="deleteCurrentBlueprintLayer()" class="mc-btn px-2.5 py-1.5 text-red-400 cursor-pointer">${dict.buildDelLayer}</button>`
+              : ''}
+          </div>
+        </div>
+
+        <!-- Espace de travail : Palette Stock à gauche + Grille Couche à droite -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+          <div class="lg:col-span-4 bg-[#1c1c1c] border-2 border-[#0e0e0e] p-3 space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="mc-font text-xs text-white">${dict.buildPaletteTitle}</span>
+              <span class="text-xs text-neutral-400">${stockItems.length}</span>
+            </div>
+            ${paletteHtml}
+          </div>
+
+          <div class="lg:col-span-8 bg-[#1c1c1c] border-2 border-[#0e0e0e] p-3 space-y-2.5">
+            <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span class="text-[#80ff20] font-semibold">
+                ${dict.buildLayerStats(currentLayerCount, totalBlueprintCount, bp.layers.length)}
+              </span>
+              <span class="text-neutral-400">${dict.buildHint}</span>
+            </div>
+
+            <div class="w-full max-w-[640px] mx-auto border-2 border-[#0a0a0a] bg-[#0e0e0e] p-1">
+              <div class="grid gap-0" style="grid-template-columns: repeat(${size}, minmax(0, 1fr));">
+                ${cellsHtml.join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // =========================================================================
+    // VUE COFFRES (AVEC GESTION DES STACKS 64 / 16 / 1)
+    // =========================================================================
+    function buildChestsAllocation(items, slotsPerChest, qtyMode) {
+      const slots = [];
+
+      for (const item of items) {
+        let qty = 0;
+        if (qtyMode === 'need') qty = item.need;
+        else if (qtyMode === 'have') qty = item.have;
+        else if (qtyMode === 'missing') qty = Math.max(0, item.need - item.have);
+
+        if (qty <= 0) continue;
+
+        const stackSize = getMinecraftStackSize(item.name);
+        let remaining = qty;
+        let stackIndex = 1;
+        const totalStacksForItem = Math.ceil(qty / stackSize);
+
+        while (remaining > 0) {
+          const countInSlot = Math.min(stackSize, remaining);
+          slots.push({
+            name: item.name,
+            count: countInSlot,
+            stackSize,
+            totalQty: qty,
+            stackIndex,
+            totalStacksForItem,
+            iconUrl: item.iconUrl,
+            fallbackUrl: item.fallbackUrl
+          });
+          remaining -= countInSlot;
+          stackIndex++;
+        }
+      }
+
+      const chests = [];
+      for (let i = 0; i < slots.length; i += slotsPerChest) {
+        chests.push(slots.slice(i, i + slotsPerChest));
+      }
+      return { chests, totalOccupiedSlots: slots.length };
+    }
+
+    function renderChestView(proj) {
+      const dict = t();
+      const container = document.getElementById('chestViewContainer');
+      const isDouble = chestSlotCapacity === 54;
+
+      const { chests, totalOccupiedSlots } = buildChestsAllocation(proj.items, chestSlotCapacity, chestQuantitySource);
+
+      if (chests.length === 0) {
+        container.innerHTML = `<p class="text-xs text-neutral-500 py-10 text-center">${dict.emptyChests}</p>`;
+        return;
+      }
+
+      const totalCapacity = chests.length * chestSlotCapacity;
+      const summaryHtml = `
+        <div class="bg-[#181818] border-2 border-[#0e0e0e] px-4 py-3 flex flex-wrap items-center justify-between gap-2">
+          <span class="mc-font text-xs sm:text-sm text-[#80ff20]">
+            ${dict.chestSummary(chests.length, isDouble, totalOccupiedSlots, totalCapacity, proj.items.length)}
+          </span>
+        </div>
+      `;
+
+      const chestsGridHtml = chests.map((chestSlots, chestIdx) => {
+        const slotCells = [];
+        for (let s = 0; s < chestSlotCapacity; s++) {
+          const slot = chestSlots[s];
+          if (slot) {
+            const tooltip = `${slot.name} — ${slot.count} (Stack ${slot.stackIndex}/${slot.totalStacksForItem} · Total: ${slot.totalQty})`;
+            slotCells.push(`
+              <div title="${escapeHtml(tooltip)}" class="mc-chest-slot aspect-square flex items-center justify-center p-1 select-none">
+                ${renderIconImg(slot.iconUrl, slot.fallbackUrl, 'w-7 h-7 sm:w-8 sm:h-8')}
+                ${slot.count > 1 ? `<span class="mc-stack-num absolute bottom-0.5 right-1">${slot.count}</span>` : ''}
+              </div>
+            `);
+          } else {
+            slotCells.push(`<div class="mc-chest-slot aspect-square"></div>`);
+          }
+        }
+
+        return `
+          <div class="mc-chest-gui p-3 space-y-2">
+            <div class="flex items-center justify-between px-0.5">
+              <span class="mc-font text-xs font-bold text-[#3f3f3f]">${dict.chestTitle(chestIdx + 1, isDouble)}</span>
+              <span class="text-xs font-bold text-[#555555]">${chestSlots.length} / ${chestSlotCapacity}</span>
+            </div>
+            <div class="grid grid-cols-9 gap-0.5 bg-[#373737] p-0.5">
+              ${slotCells.join('')}
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        ${summaryHtml}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          ${chestsGridHtml}
+        </div>
+      `;
+    }
+
+    // =========================================================================
+    // OCR SPÉCIALISÉ MINECRAFT
+    // =========================================================================
     function prepareCleanWhiteBgCanvas(file) {
       return new Promise((resolve) => {
         const img = new Image();
@@ -1301,7 +1921,7 @@
           const need = parseInt(fracMatch[3], 10);
           if (name && need > 0) {
             const match = resolveMinecraftItem(name);
-            results.push({ name, have, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '', backupUrl: match?.backupUrl || '' });
+            results.push({ name, have, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '' });
             continue;
           }
         }
@@ -1312,7 +1932,7 @@
           const name = cleanItemLabel(prefixMatch[2]);
           if (name && need > 0) {
             const match = resolveMinecraftItem(name);
-            results.push({ name, have: 0, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '', backupUrl: match?.backupUrl || '' });
+            results.push({ name, have: 0, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '' });
             continue;
           }
         }
@@ -1326,7 +1946,7 @@
             const name = cleanItemLabel(rawName);
             if (name && need > 0) {
               const match = resolveMinecraftItem(name);
-              results.push({ name, have: 0, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '', backupUrl: match?.backupUrl || '' });
+              results.push({ name, have: 0, need, iconUrl: match?.iconUrl || '', fallbackUrl: match?.fallbackUrl || '' });
               continue;
             }
           }
@@ -1484,7 +2104,6 @@
       const match = resolveMinecraftItem(val);
       parsedOcrItems[idx].iconUrl = match?.iconUrl || '';
       parsedOcrItems[idx].fallbackUrl = match?.fallbackUrl || '';
-      parsedOcrItems[idx].backupUrl = match?.backupUrl || '';
       renderOcrReview();
     }
 
@@ -1499,7 +2118,7 @@
         <div class="grid grid-cols-12 gap-1.5 items-center bg-[#161616] p-1.5 border border-[#2a2a2a]">
           <div class="col-span-6 flex items-center mc-slot">
             <div class="w-8 h-8 flex items-center justify-center border-r border-[#333] shrink-0">
-              ${renderIconImg(item.iconUrl, item.fallbackUrl, item.backupUrl, 'w-6 h-6')}
+              ${renderIconImg(item.iconUrl, item.fallbackUrl, 'w-6 h-6')}
             </div>
             <input type="text" value="${escapeHtml(item.name)}" placeholder="Item"
               onchange="updateOcrItemName(${idx}, this.value)"
@@ -1517,7 +2136,7 @@
     }
 
     function addParsedRow() {
-      parsedOcrItems.push({ name: '', have: 0, need: 1, iconUrl: '', fallbackUrl: '', backupUrl: '' });
+      parsedOcrItems.push({ name: '', have: 0, need: 1, iconUrl: '', fallbackUrl: '' });
       renderOcrReview();
     }
 
@@ -1529,7 +2148,7 @@
     function confirmOcrItems() {
       for (const item of parsedOcrItems) {
         if (item.name && item.name.trim()) {
-          upsertMaterial(item.name.trim(), item.have || 0, item.need || 1, item.iconUrl || '', item.fallbackUrl || '', item.backupUrl || '');
+          upsertMaterial(item.name.trim(), item.have || 0, item.need || 1, item.iconUrl || '', item.fallbackUrl || '');
         }
       }
       closeOcrReview();
@@ -1537,21 +2156,22 @@
     }
 
     // --- Formatage Stacks & Shulkers ---
-    function formatStacks(missing) {
-      if (missing < 64) return `${missing}`;
-      const shulkers = Math.floor(missing / 1728);
-      const remAfterShulker = missing % 1728;
-      const stacks = Math.floor(remAfterShulker / 64);
-      const rest = remAfterShulker % 64;
+    function formatStacks(missing, stackSize = 64) {
+      if (stackSize === 1 || missing < stackSize) return `${missing}`;
+      const shulkerCap = stackSize * 27;
+      const shulkers = Math.floor(missing / shulkerCap);
+      const remAfterShulker = missing % shulkerCap;
+      const stacks = Math.floor(remAfterShulker / stackSize);
+      const rest = remAfterShulker % stackSize;
 
       const parts = [];
       if (shulkers > 0) parts.push(`${shulkers} shulker${shulkers > 1 ? 's' : ''}`);
-      if (stacks > 0) parts.push(`${stacks}×64`);
+      if (stacks > 0) parts.push(`${stacks}×${stackSize}`);
       if (rest > 0) parts.push(`${rest}`);
       return `${missing} (${parts.join(' + ')})`;
     }
 
-    // --- Rendu ---
+    // --- Rendu Global ---
     function render() {
       const lang = state.lang || 'fr';
       const dict = t();
@@ -1574,13 +2194,38 @@
       document.getElementById('uiCloseReview').textContent = dict.closeReview;
       document.getElementById('uiAddRowBtn').textContent = dict.addRow;
       document.getElementById('uiConfirmOcrBtn').textContent = dict.confirmOcr;
-      document.getElementById('uiMaterialsHeader').textContent = dict.materialsHeader;
+      document.getElementById('viewModeListBtn').textContent = dict.viewList;
+      document.getElementById('viewModeChestBtn').textContent = dict.viewChest;
+      document.getElementById('viewModeBuildBtn').textContent = dict.viewBuild;
       document.getElementById('filterAll').textContent = dict.filterAll;
       document.getElementById('filterTodo').textContent = dict.filterTodo;
       document.getElementById('filterDone').textContent = dict.filterDone;
+      document.getElementById('chestTypeDoubleBtn').textContent = dict.chestDouble;
+      document.getElementById('chestTypeSingleBtn').textContent = dict.chestSingle;
+      document.getElementById('uiOnionSkinLabel').textContent = dict.onionSkinLabel;
+
+      const gridSelect = document.getElementById('gridSizeSelect');
+      Array.from(gridSelect.options).forEach(opt => {
+        opt.text = dict.gridSizeOpt(opt.value);
+      });
+
+      const srcSelect = document.getElementById('chestSourceSelect');
+      srcSelect.options[0].text = dict.chestSrcNeed;
+      srcSelect.options[1].text = dict.chestSrcHave;
+      srcSelect.options[2].text = dict.chestSrcMissing;
+      srcSelect.value = chestQuantitySource;
 
       document.getElementById('langBtnFr').className = `mc-font text-xs px-2.5 py-1.5 cursor-pointer ${lang === 'fr' ? 'bg-[#80ff20] text-black font-bold' : 'bg-[#1a1a1a] text-neutral-400'}`;
       document.getElementById('langBtnEn').className = `mc-font text-xs px-2.5 py-1.5 cursor-pointer ${lang === 'en' ? 'bg-[#80ff20] text-black font-bold' : 'bg-[#1a1a1a] text-neutral-400'}`;
+
+      // Boutons mode Liste / Coffres / Construction
+      document.getElementById('viewModeListBtn').className = `mc-font text-xs px-3 py-1.5 cursor-pointer ${currentViewMode === 'list' ? 'bg-[#80ff20] text-black font-bold' : 'bg-[#1a1a1a] text-neutral-400 hover:text-white'}`;
+      document.getElementById('viewModeChestBtn').className = `mc-font text-xs px-3 py-1.5 cursor-pointer ${currentViewMode === 'chest' ? 'bg-[#80ff20] text-black font-bold' : 'bg-[#1a1a1a] text-neutral-400 hover:text-white'}`;
+      document.getElementById('viewModeBuildBtn').className = `mc-font text-xs px-3 py-1.5 cursor-pointer ${currentViewMode === 'build' ? 'bg-[#80ff20] text-black font-bold' : 'bg-[#1a1a1a] text-neutral-400 hover:text-white'}`;
+
+      // Boutons Double Coffre / Coffre Simple
+      document.getElementById('chestTypeDoubleBtn').className = `px-2.5 py-1.5 cursor-pointer ${chestSlotCapacity === 54 ? 'bg-[#80ff20] text-black font-bold' : 'bg-[#1a1a1a] text-neutral-400 hover:text-white'}`;
+      document.getElementById('chestTypeSingleBtn').className = `px-2.5 py-1.5 cursor-pointer ${chestSlotCapacity === 27 ? 'bg-[#80ff20] text-black font-bold' : 'bg-[#1a1a1a] text-neutral-400 hover:text-white'}`;
 
       ['all', 'todo', 'done'].forEach(f => {
         const btn = document.getElementById('filter' + f.charAt(0).toUpperCase() + f.slice(1));
@@ -1592,7 +2237,7 @@
         catEl.textContent = dict.texturesLoading;
         catEl.className = 'text-xs text-neutral-400';
       } else if (catalogState === 'loaded') {
-        catEl.textContent = dict.texturesLoaded(mcCatalog.length, catalogSourceLabel);
+        catEl.textContent = dict.texturesLoaded(mcCatalog.length);
         catEl.className = 'text-xs text-[#80ff20]';
       } else {
         catEl.textContent = dict.texturesOffline;
@@ -1616,6 +2261,39 @@
       document.getElementById('globalStatsText').textContent = dict.stats(doneItems, totalItems, globalPct);
       document.getElementById('globalProgressBar').style.width = globalPct + '%';
 
+      const listEl = document.getElementById('materialsList');
+      const chestEl = document.getElementById('chestViewContainer');
+      const buildEl = document.getElementById('buildViewContainer');
+      const listCtrls = document.getElementById('listViewControls');
+      const chestCtrls = document.getElementById('chestViewControls');
+      const buildCtrls = document.getElementById('buildViewControls');
+
+      listEl.classList.add('hidden');
+      chestEl.classList.add('hidden');
+      buildEl.classList.add('hidden');
+      listCtrls.classList.add('hidden');
+      chestCtrls.classList.add('hidden');
+      buildCtrls.classList.add('hidden');
+
+      if (currentViewMode === 'chest') {
+        chestEl.classList.remove('hidden');
+        chestCtrls.classList.remove('hidden');
+        renderChestView(proj);
+        return;
+      }
+
+      if (currentViewMode === 'build') {
+        buildEl.classList.remove('hidden');
+        buildCtrls.classList.remove('hidden');
+        document.getElementById('onionSkinToggle').checked = !!proj.blueprint.showOnionSkin;
+        gridSelect.value = String(proj.blueprint.size || 16);
+        renderBuildView(proj);
+        return;
+      }
+
+      listEl.classList.remove('hidden');
+      listCtrls.classList.remove('hidden');
+
       const searchTerm = normalizeStr(document.getElementById('listSearchInput').value);
 
       let visibleItems = [...proj.items];
@@ -1627,7 +2305,6 @@
 
       visibleItems.sort((a, b) => (a.have >= a.need ? 1 : 0) - (b.have >= b.need ? 1 : 0));
 
-      const listEl = document.getElementById('materialsList');
       if (visibleItems.length === 0) {
         listEl.innerHTML = `<p class="col-span-full text-xs text-neutral-500 py-10 text-center">${dict.emptyList}</p>`;
         return;
@@ -1637,6 +2314,7 @@
         const isValidated = item.have >= item.need;
         const pct = Math.min(100, Math.round((item.have / item.need) * 100));
         const missing = Math.max(0, item.need - item.have);
+        const stackSize = getMinecraftStackSize(item.name);
         const isPickerOpen = activeIconPickerId === item.id;
 
         return `
@@ -1645,7 +2323,7 @@
               <div class="flex items-center gap-3 min-w-0">
                 <button type="button" onclick="toggleIconPicker('${item.id}')"
                   class="w-11 h-11 mc-slot flex items-center justify-center shrink-0 cursor-pointer">
-                  ${renderIconImg(item.iconUrl, item.fallbackUrl, item.backupUrl, 'w-8 h-8')}
+                  ${renderIconImg(item.iconUrl, item.fallbackUrl, 'w-8 h-8')}
                 </button>
 
                 <div class="min-w-0">
@@ -1653,7 +2331,7 @@
                     <span class="text-sm font-bold truncate ${isValidated ? 'text-[#80ff20]' : 'text-white'}">${escapeHtml(item.name)}</span>
                     ${isValidated
                       ? `<span class="mc-font text-[10px] bg-[#3c8527] text-white px-2 py-0.5 border border-[#0f1f0a]">${dict.validatedBadge}</span>`
-                      : `<span class="text-xs text-amber-400">${dict.missingLabel(formatStacks(missing))}</span>`
+                      : `<span class="text-xs text-amber-400">${dict.missingLabel(formatStacks(missing, stackSize))}</span>`
                     }
                   </div>
                 </div>
@@ -1661,8 +2339,11 @@
 
               <div class="flex flex-wrap items-center gap-1 shrink-0">
                 <button onclick="incrementItem('${item.id}', -1)" class="mc-btn px-2 py-1 text-xs cursor-pointer">-1</button>
-                <input type="number" value="${item.have}" min="0" onchange="setItemHave('${item.id}', this.value)"
-                  class="w-16 mc-slot px-1.5 py-1 text-center text-xs text-white focus:outline-none" />
+                <input type="text" inputmode="text" value="${item.have}"
+                  title="Saisir un nombre ou un calcul (ex: 3+2)"
+                  onkeydown="handleHaveKeyDown(event, '${item.id}')"
+                  onchange="commitItemHaveExpr('${item.id}', this.value)"
+                  class="w-20 mc-slot px-1.5 py-1 text-center text-xs text-white focus:outline-none focus:border-[#80ff20]" />
                 <button onclick="editItemNeed('${item.id}')" title="Modifier le total requis"
                   class="text-xs text-neutral-400 hover:text-white px-1 underline decoration-dotted cursor-pointer">/ ${item.need}</button>
                 <button onclick="incrementItem('${item.id}', 1)" class="mc-btn px-2 py-1 text-xs cursor-pointer">+1</button>
